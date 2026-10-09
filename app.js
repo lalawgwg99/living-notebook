@@ -89,8 +89,8 @@ function countdownChip(n) {
   const d = daysUntil(n.eventEnd);
   if (d === null) return '';
   if (d < 0) return `<span class="countdown-chip ended">已結束</span>`;
-  if (d === 0) return `<span class="countdown-chip urgent">⏰ 今天到期！</span>`;
-  if (d <= 3) return `<span class="countdown-chip urgent">⏰ 剩 ${d} 天</span>`;
+  if (d === 0) return `<span class="countdown-chip urgent">今天到期</span>`;
+  if (d <= 3) return `<span class="countdown-chip urgent">剩 ${d} 天</span>`;
   if (d <= 7) return `<span class="countdown-chip soon">剩 ${d} 天</span>`;
   return `<span class="countdown-chip active">剩 ${d} 天</span>`;
 }
@@ -229,10 +229,10 @@ async function absorbHost(silent) {
 
 /* ---------------- 檔期篩選 ---------------- */
 const PHASES = [
-  { id: 'active', name: '進行中', emoji: '🟢', color: '#3d7a34' },
-  { id: 'expiring', name: '即將到期', emoji: '⏰', color: '#b3402e' },
-  { id: 'upcoming', name: '未開始', emoji: '🔵', color: '#4a6fa5' },
-  { id: 'ended', name: '已結束', emoji: '⚫', color: '#a89d8c' },
+  { id: 'active', name: '進行中', color: '#3d7a34' },
+  { id: 'expiring', name: '即將到期', color: '#b3402e' },
+  { id: 'upcoming', name: '未開始', color: '#4a6fa5' },
+  { id: 'ended', name: '已結束', color: '#a89d8c' },
 ];
 function renderPhases() {
   const el = $('phaseList');
@@ -246,7 +246,7 @@ function renderPhases() {
   el.innerHTML = PHASES.map((p) =>
     `<button class="phase-row ${selectedPhase === p.id ? 'active' : ''}" data-phase="${p.id}">
       <span class="phase-dot" style="background:${p.color}"></span>
-      <span class="phase-row-name">${p.emoji} ${p.name}</span>
+      <span class="phase-row-name">${p.name}</span>
       <span class="phase-row-count">${counts[p.id]} 則</span>
     </button>`).join('');
 }
@@ -260,11 +260,11 @@ function renderExpiryBanner() {
     .slice(0, 5);
   if (!list.length || selectedPhase !== 'all') { el.classList.add('hidden'); el.innerHTML = ''; return; }
   el.classList.remove('hidden');
-  el.innerHTML = `⏰ <b>${list.length} 則活動即將到期</b>
+  el.innerHTML = `<b>${list.length} 則活動即將到期</b>
     <ul>${list.map((n) => {
       const d = daysUntil(n.eventEnd);
       const label = d === 0 ? '今天到期' : `剩 ${d} 天`;
-      return `<li><span>📎 ${esc(String(n.eventName || n.title || '未命名').slice(0, 20))}</span>
+      return `<li><span>${esc(String(n.eventName || n.title || '未命名').slice(0, 20))}</span>
         <button class="eb-go" data-id="${n.id}">${label} →</button></li>`;
     }).join('')}</ul>`;
 }
@@ -1012,25 +1012,25 @@ function noteCard(n, idx) {
   const chip = countdownChip(n);
   if (chip || n.eventStart || n.eventEnd) {
     const range = (n.eventStart || n.eventEnd)
-      ? `<span class="event-dates">📅 <b>${fmtDay(n.eventStart) || '?'}</b> – <b>${fmtDay(n.eventEnd) || '?'}</b>${n.brand ? ` · ${esc(n.brand)}` : ''}</span>` : '';
+      ? `<span class="event-dates"><b>${fmtDay(n.eventStart) || '?'}</b> – <b>${fmtDay(n.eventEnd) || '?'}</b>${n.brand ? ` · ${esc(n.brand)}` : ''}</span>` : '';
     eventHtml = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${chip}${range}</div>`;
   }
-  const typeLabel = n.type === 'link' ? '🔗 連結' : n.type === 'synth' ? '🤖 腦的思考'
-    : n.type === 'image' ? '📷 圖片' : n.type === 'pdf' ? '📄 PDF' : '✏️ 文字';
+  const typeLabel = n.type === 'link' ? '連結' : n.type === 'synth' ? '腦的思考'
+    : n.type === 'image' ? '圖片' : n.type === 'pdf' ? 'PDF' : '文字';
 
   // 抓不到內容：溫柔的求救卡片
   let helpHtml = '';
   let actionsHtml = '';
   const failed = n.needsHelp || (n.type === 'link' && !n.summary && !(n.keyPoints || []).length);
   if (failed) {
-    helpHtml = `<p class="needs-help-msg">🙈 <b>這支影片穿了隱形衣</b>，我抓不到它的內容。你可以幫我補充，我來整理成重點。</p>`;
+    helpHtml = `<p class="needs-help-msg"><b>抓不到內容</b>，你可以幫我補充，我來整理成重點。</p>`;
     actionsHtml = `<div class="note-actions has-actions">
-        <button class="btn-mini" data-act="supplement">✏️ 幫我補充</button>
+        <button class="btn-mini" data-act="supplement">幫我補充</button>
         <button class="btn-mini ghost" data-act="retry">↻ 重抓</button>
       </div>`;
   } else if (n.eventEnd) {
     actionsHtml = `<div class="note-actions has-actions">
-        <button class="btn-ics" data-act="ics">📅 加入行事曆</button>
+        <button class="btn-ics" data-act="ics">加入行事曆</button>
       </div>`;
   }
   const delay = Math.min((idx || 0) * 60, 600);
@@ -1086,7 +1086,7 @@ function renderChat() {
     let cite = '';
     if (m.role !== 'user' && Array.isArray(m.sources) && m.sources.length) {
       cite = `<div class="cite-cards">${m.sources.slice(0, 4).map((s) =>
-        `<button class="cite-card" data-id="${esc(s.id)}">📎 ${esc(String(s.title || '未命名').slice(0, 18))}</button>`).join('')}</div>`;
+        `<button class="cite-card" data-id="${esc(s.id)}">${esc(String(s.title || '未命名').slice(0, 18))}</button>`).join('')}</div>`;
     }
     return `<div class="msg ${m.role === 'user' ? 'user' : 'bot'}">${esc(m.content)}${cite}</div>`;
   }).join('');
