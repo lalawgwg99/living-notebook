@@ -612,3 +612,78 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .countdown-chip.urgent { animation: none; }
 }
+
+/* ================= v4 專業質感：三欄＋固定助手 ================= */
+:root {
+  --shadow: 0 1px 2px rgba(43, 38, 32, 0.05), 0 6px 20px rgba(43, 38, 32, 0.06);
+  --line: rgba(43, 38, 32, 0.09);
+}
+
+/* 三欄佈局 */
+.layout {
+  grid-template-columns: 248px minmax(0, 1fr) 340px;
+  max-width: 1420px;
+  gap: 24px;
+}
+
+/* 右欄：AI 助手固定側欄（桌面） */
+.chat-col { position: sticky; top: 76px; height: calc(100vh - 100px); min-height: 420px; }
+.chat-col .chat-panel {
+  position: static; width: auto; height: 100%; max-height: none;
+  right: auto; bottom: auto;
+}
+.chat-fab { display: none; }
+.chat-head .chat-close { display: none; }
+.chat-title { letter-spacing: 1px; }
+
+/* 質感：卡片更乾淨的邊框與陰影 */
+.note-card, .persona-mini, .brain-detail, .modal {
+  border: 1px solid var(--line);
+}
+.note-card { border-left: 4px solid var(--mood-line); }
+.note-card:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(43,38,32,.05), 0 10px 28px rgba(43,38,32,.09); }
+.brain-row, .phase-row { border: 1px solid transparent; }
+.brain-row.active, .phase-row.active { border-color: var(--line); box-shadow: var(--shadow); }
+
+/* 空狀態：極簡線稿 */
+.empty-mark { display: flex; justify-content: center; margin-bottom: 14px; color: var(--mood); opacity: 0.75; }
+.empty-mark svg { width: 84px; height: 84px; }
+.empty-state h2 { font-size: 20px; letter-spacing: 2px; }
+.empty-state p { color: var(--ink-soft); }
+
+/* 多圖預覽列 */
+.img-preview-list { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.img-preview-item { position: relative; width: 84px; height: 84px; }
+.img-preview-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.img-preview-item button {
+  position: absolute; top: -7px; right: -7px; width: 22px; height: 22px;
+  border-radius: 50%; border: none; background: var(--ink); color: #fff;
+  font-size: 12px; line-height: 1; cursor: pointer;
+}
+
+/* 去玩具化：拿掉多餘的漂浮動畫，保留呼吸 */
+.brain-dot { animation: none; }
+
+/* 標題字級節奏 */
+.note-title { font-size: 16px; letter-spacing: 0.2px; }
+.brain-detail-name { letter-spacing: 1px; }
+.brand-name { letter-spacing: 3px; }
+
+/* 按鈕質感 */
+.btn-primary { letter-spacing: 2px; font-weight: 600; box-shadow: 0 2px 8px rgba(43,38,32,.12); }
+.modal-tab { letter-spacing: 1px; font-weight: 600; }
+.modal-tab.active { letter-spacing: 1px; }
+
+/* 平板／手機：聊天恢復為浮動面板 */
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 248px minmax(0, 1fr); max-width: 1180px; }
+  .chat-col {
+    position: fixed; right: 16px; bottom: 86px; z-index: 30;
+    width: min(380px, calc(100vw - 32px)); height: 500px; max-height: 72vh;
+    display: none;
+  }
+  .chat-col.open { display: block; }
+  .chat-col .chat-panel { height: 100%; box-shadow: 0 12px 44px rgba(43,38,32,0.18); }
+  .chat-fab { display: block; }
+  .chat-head .chat-close { display: block; }
+}

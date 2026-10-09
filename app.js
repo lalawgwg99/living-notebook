@@ -154,8 +154,8 @@ let brains = load(LS_BRAINS, []);
 // 舊版筆記沒有 brainId → 視為待分類
 notes.forEach((n) => { if (!('brainId' in n)) n.brainId = null; });
 let persona = load(LS_PERSONA, null) || {
-  name: null, mood: '還沒醒來', color: '#c2703d', emoji: '📓',
-  greeting: '嗨，我還沒有名字。丟一些你看到的影片或文章給我，我會自動分類、長出大腦。',
+  name: null, mood: '就緒', color: '#4a6fa5', emoji: '📋',
+  greeting: '把 DM、活動訊息丟進來，我會整理成檔期，標出截止日並提醒你。',
   traits: [], bio: '', absorbedCount: 0, updatedAt: null,
 };
 let chatHistory = load(LS_CHAT, []);
@@ -182,9 +182,8 @@ function renderPersona(growing) {
   document.documentElement.style.setProperty('--mood', persona.color || '#c2703d');
   $('personaEmoji').textContent = persona.emoji || '📓';
   $('personaMood').textContent = persona.mood || '';
-  $('personaName').textContent = persona.name || '一本空白的筆記本';
+  $('personaName').textContent = persona.name || '檔期助手';
   $('personaGreeting').textContent = persona.greeting || '';
-  $('chatPersonaName').textContent = persona.name || '筆記本';
   $('statNotes').textContent = notes.length;
   $('statPoints').textContent = notes.reduce((a, n) => a + (n.keyPoints ? n.keyPoints.length : 0), 0);
   if (growing) {
@@ -453,7 +452,7 @@ async function classifyInbox() {
     await routeNote(n, true);
   }
   renderAll();
-  toast('分類完成 ✨');
+  toast('分類完成');
 }
 
 /* ---------------- 全自動管線 ---------------- */
@@ -501,7 +500,7 @@ async function retryIngest(id) {
       await routeNote(n, true);
       if (n.brainId) await evolveBrain(n.brainId, n);
       renderAll();
-      toast('抓到了 ✨');
+      toast('抓到了');
     } else {
       toast('還是抓不到，稍後再試試');
     }
@@ -545,7 +544,7 @@ async function saveSupplement() {
     maybeAbsorbHost();
     absorbBurst();
     closeSupplement(); renderAll();
-    toast('補充完成 ✨ 大腦吃掉了');
+    toast('補充完成');
   } catch (e) {
     toast('整理失敗，再試一次');
   } finally {
@@ -676,63 +675,86 @@ async function extractPdfText(file, onProgress) {
   return text.slice(0, 9000).trim();
 }
 
-let pendingImage = null;  // { dataURL, thumb }
+let pendingImages = [];  // [{ dataURL, thumb }]
 let pendingPdf = null;
-async function handleImageFile(file) {
-  if (!file || !file.type.startsWith('image/')) { toast('請選擇圖片檔'); return; }
-  try {
-    const img = await loadImageFromFile(file);
-    pendingImage = {
-      dataURL: downscaleImage(img, 1600, 0.85),
-      thumb: downscaleImage(img, 480, 0.75),
-    };
-    const pv = $('imgPreview');
-    pv.src = pendingImage.thumb; pv.classList.remove('hidden');
-    toast('圖片就緒，按「丟進筆記本」開始辨識');
-  } catch { toast('圖片讀取失敗'); }
+async function handleImageFiles(files) {
+  const list = [...files].filter((f) => f.type.startsWith('image/')).slice(0, 10);
+  if (!list.length) { toast('請選擇圖片檔'); return; }
+  for (const file of list) {
+    try {
+      const img = await loadImageFromFile(file);
+      pendingImages.push({
+        dataURL: downscaleImage(img, 1600, 0.85),
+        thumb: downscaleImage(img, 480, 0.75),
+      });
+    } catch { /* 單張失敗略過 */ }
+  }
+  renderImgPreviews();
+  if (pendingImages.length) toast(`已選 ${pendingImages.length} 張，按「新增」開始辨識`);
 }
-async function addImageNote() {
-  if (pipelining || !pendingImage) return;
+function renderImgPreviews() {
+  const box = $('imgPreviewList');
+  box.innerHTML = pendingImages.map((p, i) =>
+    `<div class="img-preview-item"><img src="${p.thumb}" alt="圖片${i + 1}">
+     <button data-rmimg="${i}" aria-label="移除">×</button></div>`).join('');
+}
+async function addImageNotes() {
+  if (pipelining || !pendingImages.length) return;
   pipelining = true;
   const hint = $('imgHint').value.trim();
+  const queue = pendingImages.splice(0, pendingImages.length);
+  renderImgPreviews();
+  $('imgHint').value = '';
   $('personaOrb').classList.add('working');
   $('modalLoading').classList.remove('hidden');
   $('modalPipeline').innerHTML = '';
   $('modalSave').disabled = true;
+  let okCount = 0;
   try {
-    const s1 = pipelineStep('辨識圖片文字');
-    $('modalLoadingText').textContent = '正在讀圖片上的文字…';
-    const ocrText = await ocrImage(pendingImage.dataURL, (p) => {
-      $('modalLoadingText').textContent = `辨識圖片文字中 ${p}%…`;
-    });
-    s1.classList.add('done'); s1.textContent = '✓ 圖片文字辨識完成';
-    if (!ocrText || ocrText.replace(/\s/g, '').length < 10) {
-      toast('圖片上的文字太少，換張清楚一點的試試');
-      return;
+    for (let idx = 0; idx < queue.length; idx++) {
+      const p = queue[idx];
+      $('modalLoadingText').textContent = `處理第 ${idx + 1}/${queue.length} 張…`;
+      pipelineStep(`第 ${idx + 1} 張：辨識圖片文字`);
+      try {
+        const ocrText = await ocrImage(p.dataURL, (pct) => {
+          $('modalLoadingText').textContent = `第 ${idx + 1}/${queue.length} 張辨識中 ${pct}%…`;
+        });
+        if (!ocrText || ocrText.replace(/\s/g, '').length < 10) {
+          pipelineStep(`第 ${idx + 1} 張：文字太少，已略過`, true);
+          continue;
+        }
+        $('modalLoadingText').textContent = `第 ${idx + 1}/${queue.length} 張 AI 整理中…`;
+        const d = await aiTask('notebook-summarize', {
+          title: hint || 'DM圖片',
+          text: (hint ? `補充說明：${hint}\n` : '') + ocrText.slice(0, 4000),
+        }, 60000);
+        const s = extractJSON(d.text);
+        if (!s || !s.summary) throw new Error('bad-json');
+        const note = {
+          id: uid(), type: 'image',
+          title: (hint || s.event_name || (s.brand ? s.brand + '活動' : null) || 'DM圖片').slice(0, 30),
+          image: p.thumb,
+          brainId: null, createdAt: Date.now(),
+        };
+        note.summary = String(s.summary || '').slice(0, 120);
+        note.keyPoints = Array.isArray(s.key_points) ? s.key_points.filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(0, 5) : [];
+        note.tags = Array.isArray(s.tags) ? s.tags.filter((x) => typeof x === 'string').map((x) => x.slice(0, 12)).slice(0, 5) : [];
+        applyEventFields(note, s);
+        notes.unshift(note); freshIds.add(note.id);
+        try { await routeNote(note, true); } catch {}
+        if (note.brainId) { try { await evolveBrain(note.brainId, note); } catch {} }
+        pipelineStep(`第 ${idx + 1} 張：完成`, true);
+        okCount++;
+      } catch (e) {
+        pipelineStep(`第 ${idx + 1} 張：處理失敗，已略過`, true);
+      }
+      if (idx < queue.length - 1) await new Promise((r) => setTimeout(r, 1200));
     }
-    $('modalLoadingText').textContent = 'AI 正在整理活動資訊…';
-    const d = await aiTask('notebook-summarize', {
-      title: hint || 'DM圖片',
-      text: (hint ? `補充說明：${hint}\n` : '') + ocrText.slice(0, 4000),
-    }, 60000);
-    const s = extractJSON(d.text);
-    if (!s || !s.summary) throw new Error('bad-json');
-    const note = {
-      id: uid(), type: 'image',
-      title: (hint || s.event_name || (s.brand ? s.brand + '活動' : null) || 'DM圖片').slice(0, 30),
-      image: pendingImage.thumb,
-      brainId: null, createdAt: Date.now(),
-    };
-    await finalizeNote(note, s, ['圖片文字辨識完成', 'AI 整理完成']);
-    pendingImage = null;
-    $('imgPreview').classList.add('hidden'); $('imgPreview').src = '';
-    $('imgHint').value = '';
-    const eb = $('expiryBanner');
-    if (note.eventEnd && daysUntil(note.eventEnd) !== null && daysUntil(note.eventEnd) <= 7) {
-      setTimeout(() => toast(`⏰ 這檔活動剩 ${daysUntil(note.eventEnd)} 天到期，已幫你盯著`), 800);
-    }
-  } catch (e) {
-    toast('圖片處理失敗，再試一次');
+    save(LS_NOTES, notes);
+    maybeAbsorbHost();
+    absorbBurst();
+    closeModal(true); renderAll();
+    toast(okCount === queue.length ? `完成，共新增 ${okCount} 張` : `完成 ${okCount}/${queue.length} 張`);
   } finally {
     pipelining = false;
     $('personaOrb').classList.remove('working');
@@ -844,7 +866,7 @@ async function routeNote(note, quiet) {
       brains.unshift(nb); save(LS_BRAINS, brains);
       note.brainId = nb.id;
       if (!quiet) {
-        toast(`🧠 新大腦誕生：「${nb.name}」`);
+        toast(`新大腦「${nb.name}」已建立`);
         setTimeout(() => {
           const row = $('brow-' + nb.id);
           if (row) row.classList.add('brain-new');
@@ -881,7 +903,7 @@ async function evolveBrain(brainId, newNote) {
   // 缺口被餵食：新筆記標籤命中大腦的「想學的」
   if (newNote && (b.gaps || []).length && (newNote.tags || []).length) {
     const hit = b.gaps.find((g) => newNote.tags.some((t) => t.includes(g) || g.includes(t)));
-    if (hit) setTimeout(() => toast(`😋「${b.name}」吃到了想學的「${hit}」！`), 600);
+    if (hit) setTimeout(() => toast(`「${b.name}」找到了想學的「${hit}」`), 600);
   }
 
   try {
@@ -911,7 +933,7 @@ async function evolveBrain(brainId, newNote) {
       b.retired = true;
       brains.unshift(...kids);
       if (selectedBrain === b.id) selectedBrain = kids[0].id;
-      setTimeout(() => toast(`🔀「${b.name}」分裂成 ${kids.map((k) => `「${k.name}」`).join('、')}！`), 900);
+      setTimeout(() => toast(`「${b.name}」已拆分為 ${kids.map((k) => `「${k.name}」`).join('、')}`), 900);
     }
 
     // 繁衍：意想不到的新大腦
@@ -919,7 +941,7 @@ async function evolveBrain(brainId, newNote) {
       const nb = makeBrain(evo.spawn);
       nb.spawnReason = String(evo.spawn.reason || '').slice(0, 60);
       brains.unshift(nb);
-      setTimeout(() => toast(`🌱 意外繁衍出新大腦：「${nb.name}」${nb.spawnReason ? '（' + nb.spawnReason + '）' : ''}`), 1400);
+      setTimeout(() => toast(`新增分類「${nb.name}」${nb.spawnReason ? '（' + nb.spawnReason + '）' : ''}`), 1400);
     }
 
     // 思考筆記：大腦自己長出的連結
@@ -932,7 +954,7 @@ async function evolveBrain(brainId, newNote) {
         summary: '', keyPoints: [], tags: brainTags(b).slice(0, 3),
         brainId: targetBrain, createdAt: Date.now(),
       });
-      setTimeout(() => toast(`💡「${b.name}」長出了一篇思考筆記`), 1800);
+      setTimeout(() => toast(`「${b.name}」產生了一篇關聯整理`), 1800);
     }
     save(LS_BRAINS, brains); save(LS_NOTES, notes);
   } catch (e) { /* 進化失敗就維持現狀 */ }
@@ -944,7 +966,7 @@ function maybeAbsorbHost() {
   if (hostAbsorbCounter >= 5) {
     hostAbsorbCounter = 0;
     absorbHost(true);
-    setTimeout(() => toast('✨ 主人格也默默長大了'), 2200);
+    setTimeout(() => toast('助手已更新'), 2200);
   }
 }
 
@@ -1076,17 +1098,24 @@ function jumpToNote(id) {
   if (!n) return;
   selectedBrain = (n.brainId && brainById(n.brainId)) ? n.brainId : 'all';
   renderAll();
-  toast('📍 已定位到相關筆記');
+  toast('已定位到相關筆記');
   const card = document.querySelector(`.note-card[data-id="${id}"]`);
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function openChat() {
-  $('chatPanel').classList.remove('hidden');
+  setChatOpen(true);
   if (chatHistory.length === 0) {
-    pushChatMsg('bot', (persona.name ? `我是${persona.name}。` : '嗨！') + '你丟進來的東西，我的大腦們都記得。想找什麼重點，直接問我。');
+    pushChatMsg('bot', '你好，我是你的檔期助手。問我任何活動的日期、優惠或到期資訊。');
   } else renderChat();
   setTimeout(() => $('chatInput').focus(), 50);
 }
+/* 桌面版助手固定在右欄；手機版才用浮動開關 */
+function isDesktopChat() { return window.matchMedia('(min-width: 1100px)').matches; }
+function setChatOpen(open) {
+  if (isDesktopChat()) return;
+  $('chatCol').classList.toggle('open', open);
+}
+function isChatOpen() { return isDesktopChat() || $('chatCol').classList.contains('open'); }
 /* ---------------- 台股即時報價（瀏覽器直連證交所，有開 CORS） ---------------- */
 const TW_STOCK_NAMES = {
 '0050': '元大台灣50', '00631L': '元大台灣50正2', '00646': '元大S&P500',
@@ -1153,7 +1182,7 @@ async function askChat() {
   // 儀式感：主人格翻找記憶，相關筆記標題隱隱發光
   const ritual = document.createElement('div');
   ritual.className = 'msg bot ritual';
-  ritual.innerHTML = '🧠 主人格正在翻找大腦們的記憶…' +
+  ritual.innerHTML = '正在搜尋相關內容…' +
     (ctx.length ? `<div class="ritual-titles">${ctx.slice(0, 4).map((n) =>
       `<span>✦ ${esc(String(n.title || '未命名').slice(0, 22))}</span>`).join('')}</div>` : '');
   $('chatBody').appendChild(ritual);
@@ -1245,8 +1274,8 @@ async function saveNote() {
     if (!body && !title) { $('textBody').focus(); return; }
     await addTextNote(title, body);
   } else if (modalTab === 'image') {
-    if (!pendingImage) { toast('請先選擇或貼上圖片'); return; }
-    await addImageNote();
+    if (!pendingImages.length) { toast('請先選擇或貼上圖片'); return; }
+    await addImageNotes();
   } else if (modalTab === 'pdf') {
     const f = $('pdfFile').files[0] || pendingPdf;
     if (!f) { toast('請先選擇 PDF'); return; }
@@ -1274,26 +1303,41 @@ function bind() {
     const zone = $(zoneId), input = $(inputId);
     zone.addEventListener('click', () => input.click());
     zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
-    input.addEventListener('change', () => { if (input.files[0]) handler(input.files[0]); input.value = ''; });
+    input.addEventListener('change', () => {
+      if (!input.files.length) return;
+      if (input.multiple) handler([...input.files]);
+      else handler(input.files[0]);
+      input.value = '';
+    });
     ['dragover', 'dragenter'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('dragover'); }));
     ['dragleave', 'drop'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('dragover'); }));
     zone.addEventListener('drop', (e) => {
-      const f = e.dataTransfer && e.dataTransfer.files[0];
-      if (f) handler(f);
+      const fs = e.dataTransfer && e.dataTransfer.files;
+      if (!fs || !fs.length) return;
+      handler(input.multiple ? [...fs] : fs[0]);
     });
   }
-  bindDrop('imgDrop', 'imgFile', handleImageFile);
+  bindDrop('imgDrop', 'imgFile', (f) => handleImageFiles(Array.isArray(f) ? f : [f]));
   bindDrop('pdfDrop', 'pdfFile', (f) => {
     if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) { toast('請選擇 PDF 檔'); return; }
     pendingPdf = f;
     $('pdfName').textContent = `已選：${f.name}`;
     toast('PDF 就緒，按「丟進筆記本」開始整理');
   });
-  // Ctrl+V 貼圖片（圖片分頁開啟時）
+  // Ctrl+V 貼圖片（圖片分頁開啟時，可多張）
   document.addEventListener('paste', (e) => {
     if (modalTab !== 'image' || $('modalBackdrop').classList.contains('hidden')) return;
-    const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
-    if (item) { const f = item.getAsFile(); if (f) handleImageFile(f); }
+    const files = [...(e.clipboardData?.items || [])]
+      .filter((i) => i.type.startsWith('image/'))
+      .map((i) => i.getAsFile()).filter(Boolean);
+    if (files.length) handleImageFiles(files);
+  });
+  // 預覽列移除單張
+  $('imgPreviewList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rmimg]');
+    if (!b) return;
+    pendingImages.splice(+b.dataset.rmimg, 1);
+    renderImgPreviews();
   });
 
   /* 檔期篩選 */
@@ -1356,11 +1400,8 @@ function bind() {
   $('viewListBtn').onclick = () => setBrainView('list');
   $('viewSkyBtn').onclick = () => setBrainView('sky');
 
-  $('chatFab').onclick = () => {
-    if ($('chatPanel').classList.contains('hidden')) openChat();
-    else $('chatPanel').classList.add('hidden');
-  };
-  $('chatClose').onclick = () => $('chatPanel').classList.add('hidden');
+  $('chatFab').onclick = () => setChatOpen(!isChatOpen());
+  $('chatClose').onclick = () => setChatOpen(false);
   $('chatSend').onclick = askChat;
   $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') askChat(); });
   $('chatBody').addEventListener('click', (e) => {
@@ -1373,7 +1414,7 @@ function bind() {
   $('importFile').addEventListener('change', (e) => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeModal(); closeSupplement(); $('chatPanel').classList.add('hidden'); }
+    if (e.key === 'Escape') { closeModal(); closeSupplement(); setChatOpen(false); }
   });
 }
 

@@ -16,8 +16,8 @@
       <span class="brand-name">活筆記</span>
     </div>
     <div class="topbar-actions">
-      <input id="searchInput" class="search" type="search" placeholder="搜尋筆記、重點、標籤…" autocomplete="off">
-      <button id="addBtn" class="btn-primary">＋ 丟進來</button>
+      <input id="searchInput" class="search" type="search" placeholder="搜尋活動、品牌、標籤…" autocomplete="off">
+      <button id="addBtn" class="btn-primary">＋ 新增</button>
     </div>
   </header>
 
@@ -31,20 +31,20 @@
           <div class="persona-mini-mood" id="personaMood">還沒醒來</div>
         </div>
       </div>
-      <p class="persona-mini-greeting" id="personaGreeting">嗨，我還沒有名字。丟一些你看到的影片或文章給我，我會自動分類、長出大腦。</p>
+      <p class="persona-mini-greeting" id="personaGreeting">把 DM、活動訊息丟進來，我會整理成檔期，標出截止日並提醒你。</p>
 
       <div class="phase-filter">
-        <div class="phase-head"><span>⏰ 檔期</span></div>
+        <div class="phase-head"><span>檔期</span></div>
         <div id="phaseList"></div>
       </div>
 
       <div class="brains-head">
-        <span>🧠 大腦們</span>
+        <span>大腦們</span>
         <span class="brains-count" id="brainsCount"></span>
       </div>
       <div class="brains-view-toggle" role="tablist" aria-label="大腦顯示方式">
-        <button class="view-btn active" id="viewListBtn">📋 清單</button>
-        <button class="view-btn" id="viewSkyBtn">✨ 星系</button>
+        <button class="view-btn active" id="viewListBtn">清單</button>
+        <button class="view-btn" id="viewSkyBtn">星系</button>
       </div>
       <nav class="brain-list" id="brainList"></nav>
       <div class="constellation-wrap hidden" id="constellationWrap">
@@ -65,72 +65,66 @@
       <div class="brain-detail hidden" id="brainDetail"></div>
       <div class="notes-grid" id="notesGrid"></div>
       <div class="empty-state" id="emptyState">
-        <div class="sleep-brain" aria-hidden="true">
-          <svg viewBox="0 0 140 140">
-            <defs>
-              <radialGradient id="sbg" cx="50%" cy="42%" r="62%">
-                <stop offset="0%" stop-color="#b9a7e8" stop-opacity="0.85"/>
-                <stop offset="100%" stop-color="#b9a7e8" stop-opacity="0"/>
-              </radialGradient>
-            </defs>
-            <circle cx="70" cy="66" r="52" fill="url(#sbg)"/>
-            <path d="M70 28c-22 0-38 16-38 37 0 7 2 14 6 19-1 3-1 5 0 7 4 12 15 21 32 21s28-9 32-21c1-2 1-4 0-7 4-5 6-12 6-19 0-21-16-37-38-37z"
-              fill="#a894e0" opacity="0.9"/>
-            <path d="M70 28c-22 0-38 16-38 37 0 7 2 14 6 19-1 3-1 5 0 7 4 12 15 21 32 21s28-9 32-21c1-2 1-4 0-7 4-5 6-12 6-19 0-21-16-37-38-37z"
-              fill="none" stroke="#7d6cc4" stroke-width="2" opacity="0.5"/>
-            <path d="M48 68q8 7 16 0M76 68q8 7 16 0" stroke="#3d3752" stroke-width="3.5"
-              fill="none" stroke-linecap="round"/>
-            <text class="zb z1" x="104" y="36" font-size="15" fill="#8f8578">z</text>
-            <text class="zb z2" x="116" y="26" font-size="12" fill="#8f8578">z</text>
-            <text class="zb z3" x="126" y="18" font-size="9" fill="#8f8578">z</text>
+        <div class="empty-mark" aria-hidden="true">
+          <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+            <rect x="16" y="22" width="64" height="58" rx="9"/>
+            <line x1="16" y1="38" x2="80" y2="38"/>
+            <line x1="34" y1="12" x2="34" y2="26"/>
+            <line x1="62" y1="12" x2="62" y2="26"/>
+            <circle cx="48" cy="58" r="11"/>
+            <line x1="48" y1="58" x2="48" y2="51"/>
+            <line x1="48" y1="58" x2="53" y2="60"/>
           </svg>
         </div>
-        <h2 class="sleeping">我還在沉睡…</h2>
-        <p>拖入一張賣場 DM 或活動截圖，<br>我會自動抓出活動名稱、日期與優惠規則，<br>到期前還會提醒你。</p>
-        <button class="btn-primary" id="emptyAddBtn">丟第一張 DM 進來</button>
+        <h2>尚無活動資訊</h2>
+        <p>上傳第一張 DM，自動辨識活動名稱、日期與優惠規則，<br>到期前會提醒你。</p>
+        <button class="btn-primary" id="emptyAddBtn">新增第一筆</button>
       </div>
     </section>
+
+    <!-- 右欄：AI 助手（桌面版固定側欄） -->
+    <aside class="chat-col" id="chatCol">
+      <div class="chat-panel" id="chatPanel">
+        <div class="chat-head">
+          <span class="chat-title">AI 助手</span>
+          <button class="chat-close" id="chatClose">✕</button>
+        </div>
+        <div class="chat-body" id="chatBody"></div>
+        <div class="chat-input-row">
+          <input id="chatInput" type="text" placeholder="例如：這週有哪些活動到期？" autocomplete="off">
+          <button id="chatSend" class="btn-primary">送出</button>
+        </div>
+      </div>
+    </aside>
   </main>
 
-  <button id="chatFab" class="chat-fab" aria-label="問筆記本">💬</button>
-  <div class="chat-panel hidden" id="chatPanel">
-    <div class="chat-head">
-      <span class="chat-title">問<span id="chatPersonaName">筆記本</span></span>
-      <button class="chat-close" id="chatClose">✕</button>
-    </div>
-    <div class="chat-body" id="chatBody"></div>
-    <div class="chat-input-row">
-      <input id="chatInput" type="text" placeholder="例如：投資腦裡有什麼重點？" autocomplete="off">
-      <button id="chatSend" class="btn-primary">送出</button>
-    </div>
-  </div>
+  <button id="chatFab" class="chat-fab" aria-label="開啟 AI 助手">💬</button>
 
   <div class="modal-backdrop hidden" id="modalBackdrop">
     <div class="modal">
       <div class="modal-tabs">
-        <button class="modal-tab active" data-tab="link">🔗 連結</button>
-        <button class="modal-tab" data-tab="text">✏️ 文字</button>
-        <button class="modal-tab" data-tab="image">📷 圖片</button>
-        <button class="modal-tab" data-tab="pdf">📄 PDF</button>
+        <button class="modal-tab active" data-tab="link">連結</button>
+        <button class="modal-tab" data-tab="text">文字</button>
+        <button class="modal-tab" data-tab="image">圖片</button>
+        <button class="modal-tab" data-tab="pdf">PDF</button>
       </div>
       <div class="modal-pane" id="paneLink">
-        <div class="feed-pod-head">🍼 投餵艙</div>
-        <input id="linkUrl" class="feed-pod" type="url" placeholder="餵入 YouTube 影片、Medium 文章或 X 貼文…" autocomplete="off">
-        <p class="modal-note">丟進來之後全自動：抓內容 → 摘要重點 → 分類進大腦 → 大腦自己進化。</p>
+        <input id="linkUrl" class="feed-pod" type="url" placeholder="貼上影片或文章連結…" autocomplete="off">
+        <p class="modal-note">全自動處理：抓取內容 → 摘要重點 → 自動分類歸檔。</p>
       </div>
       <div class="modal-pane hidden" id="paneText">
         <input id="textTitle" type="text" placeholder="標題（可不填）" autocomplete="off">
-        <textarea id="textBody" rows="5" placeholder="把想記的東西寫下來…"></textarea>
+        <textarea id="textBody" rows="5" placeholder="貼上活動訊息、LINE 轉傳內容…"></textarea>
       </div>
       <div class="modal-pane hidden" id="paneImage">
         <div class="dropzone" id="imgDrop" role="button" tabindex="0" aria-label="選擇圖片">
           <div class="dropzone-icon">📷</div>
-          <div class="dropzone-text">點此選擇 / 拖入 DM 照片<br><span>或直接 Ctrl+V 貼上截圖</span></div>
+          <div class="dropzone-text">選擇圖片 / 拖入此處（可多選）<br><span>或直接 Ctrl+V 貼上截圖</span></div>
         </div>
-        <input type="file" id="imgFile" accept="image/*" class="hidden">
-        <img id="imgPreview" class="img-preview hidden" alt="待辨識圖片預覽">
-        <input id="imgHint" type="text" placeholder="補充說明（選填，例如：這是萬家福DM）" autocomplete="off">
-        <p class="modal-note">AI 會讀出圖片上的活動名稱、日期與優惠規則。</p>
+        <input type="file" id="imgFile" accept="image/*" multiple class="hidden">
+        <div id="imgPreviewList" class="img-preview-list"></div>
+        <input id="imgHint" type="text" placeholder="補充說明（選填，例如：萬家福DM）" autocomplete="off">
+        <p class="modal-note">自動辨識圖片中的活動名稱、日期與優惠規則。</p>
       </div>
       <div class="modal-pane hidden" id="panePdf">
         <div class="dropzone" id="pdfDrop" role="button" tabindex="0" aria-label="選擇PDF">
@@ -142,7 +136,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn-ghost" id="modalCancel">取消</button>
-        <button class="btn-primary" id="modalSave">丟進筆記本</button>
+        <button class="btn-primary" id="modalSave">新增</button>
       </div>
       <div class="modal-loading hidden" id="modalLoading"><span class="spinner"></span><span id="modalLoadingText">正在抓取內容…</span></div>
       <div class="modal-pipeline hidden" id="modalPipeline"></div>
@@ -168,11 +162,10 @@
   <div class="toasts" id="toasts"></div>
   <div id="absorbFx" aria-hidden="true">
     <div class="ring"></div><div class="ring r2"></div><div class="ring r3"></div>
-    <div class="gulp">😋</div>
   </div>
 
   <footer class="foot">
-    <span>活筆記 · 你的第二個大腦</span>
+    <span>活筆記 · 檔期管理</span>
     <span class="foot-links"><button id="exportBtn" class="link-btn">匯出</button> · <button id="importBtn" class="link-btn">匯入</button></span>
     <input type="file" id="importFile" accept="application/json" class="hidden">
   </footer>
