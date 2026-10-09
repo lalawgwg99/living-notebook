@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小樣 B — 硬派儀表風</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f1f1ef; color: #161616; font-family: -apple-system, "Noto Sans TC", "PingFang TC", sans-serif; font-size: 15px; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #161616; color: #fff; }
+  .mark { width: 22px; height: 22px; background: #e8442e; flex-shrink: 0; }
+  .brand { font-weight: 800; font-size: 16px; letter-spacing: 1px; }
+  .search { flex: 1; background: #2a2a2a; border: none; color: #fff; border-radius: 4px; padding: 8px 12px; font-size: 13px; }
+  .search::placeholder { color: #888; }
+  .add { background: #e8442e; color: #fff; border: none; border-radius: 4px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .chips { display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; background: #f1f1ef; border-bottom: 1px solid #dcdcdc; }
+  .chip { flex-shrink: 0; border: 1px solid #161616; background: #fff; border-radius: 4px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .chip .n { font-family: ui-monospace, monospace; margin-left: 6px; background: #eee; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  .chip.active { background: #161616; color: #fff; }
+  .chip.active .n { background: #e8442e; color: #fff; }
+  .chip.alert { border-color: #e8442e; color: #e8442e; }
+  .main { padding: 14px 14px 40px; max-width: 480px; margin: 0 auto; }
+  .banner { background: #161616; color: #fff; border-radius: 6px; padding: 12px 14px; font-size: 13px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .banner b { color: #e8442e; font-family: ui-monospace, monospace; font-size: 15px; }
+  .card { background: #fff; border: 1px solid #dcdcdc; border-radius: 6px; margin-bottom: 10px; overflow: hidden; }
+  .card.urgent { border-left: 4px solid #e8442e; }
+  .card-body { padding: 14px 16px 12px; display: flex; gap: 14px; }
+  .info { flex: 1; min-width: 0; }
+  .info h3 { font-size: 16px; font-weight: 700; }
+  .dates { font-family: ui-monospace, monospace; font-size: 12px; color: #666; margin-top: 5px; letter-spacing: 0.5px; }
+  .summary { font-size: 13px; color: #555; margin-top: 7px; line-height: 1.6; }
+  .count { text-align: right; flex-shrink: 0; }
+  .count .big { font-family: ui-monospace, monospace; font-weight: 700; font-size: 42px; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+  .count .lbl { font-size: 10px; color: #888; letter-spacing: 1px; margin-top: 4px; }
+  .count.urgent .big { color: #e8442e; }
+  .count.urgent .lbl { color: #e8442e; font-weight: 700; }
+  .count.done .big { font-size: 13px; color: #999; font-family: inherit; letter-spacing: 0; }
+  .meter { height: 8px; background: #ececea; position: relative; }
+  .meter i { display: block; height: 100%; background: #161616; }
+  .meter.urgent i { background: #e8442e; }
+  .meter.done i { background: #bdbdbd; }
+  .meter .tick { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(0,0,0,0.18); }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; padding: 9px 16px; border-top: 1px solid #eee; }
+  .points { font-size: 12px; color: #444; font-family: ui-monospace, monospace; }
+  .points span { margin-right: 10px; }
+  .points span::before { content: "▸ "; color: #e8442e; }
+  .ics { border: 1px solid #dcdcdc; background: #fff; border-radius: 4px; font-size: 12px; padding: 5px 10px; cursor: pointer; font-weight: 600; }
+  .sec { font-size: 11px; letter-spacing: 2px; color: #999; margin: 18px 2px 8px; font-weight: 700; }
+  .sec::before { content: "▚ "; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="mark"></div><div class="brand">活筆記</div>
+    <input class="search" placeholder="搜尋活動、品牌…">
+    <button class="add">＋ 新增</button>
+  </div>
+  <div class="chips">
+    <button class="chip">全部<span class="n">4</span></button>
+    <button class="chip active">進行中<span class="n">2</span></button>
+    <button class="chip alert">即將到期<span class="n">1</span></button>
+    <button class="chip">未開始<span class="n">1</span></button>
+    <button class="chip">已結束<span class="n">1</span></button>
+  </div>
+  <div class="main">
+    <div class="banner"><span>⚠ 1 則活動即將到期</span><b>T-3d</b></div>
+
+    <div class="sec">即將到期</div>
+    <div class="card urgent">
+      <div class="card-body">
+        <div class="info">
+          <h3>雙十特賣快閃</h3>
+          <div class="dates mono">10/09 – 10/12 · 家電</div>
+          <p class="summary">雙十連假家電特賣，電視全面九折，滿千送百。</p>
+        </div>
+        <div class="count urgent"><div class="big">03</div><div class="lbl">天後截止</div></div>
+      </div>
+      <div class="meter urgent"><i style="width:75%"></i><span class="tick" style="left:25%"></span><span class="tick" style="left:50%"></span><span class="tick" style="left:75%"></span></div>
+      <div class="card-foot"><div class="points"><span>電視全面九折</span><span>滿千送百</span></div><button class="ics">+ 行事曆</button></div>
+    </div>
+
+    <div class="sec">進行中</div>
+    <div class="card">
+      <div class="card-body">
+        <div class="info">
+          <h3>惠而浦雙門冰箱特賣</h3>
+          <div class="dates mono">10/01 – 10/31 · 惠而浦</div>
+          <p class="summary">指定冰箱、微波爐組合優惠，滿額再送商品券。</p>
+        </div>
+        <div class="count"><div class="big">22</div><div class="lbl">天後截止</div></div>
+      </div>
+      <div class="meter"><i style="width:28%"></i><span class="tick" style="left:25%"></span><span class="tick" style="left:50%"></span><span class="tick" style="left:75%"></span></div>
+      <div class="card-foot"><div class="points"><span>滿3000送300</span><span>兌換至11/7</span></div><button class="ics">+ 行事曆</button></div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="info">
+          <h3>中秋家電展</h3>
+          <div class="dates mono">09/20 – 09/28 · 萬家福</div>
+          <p class="summary">中秋檔期全館滿萬折千，贈品已兌換完畢。</p>
+        </div>
+        <div class="count done"><div class="big">已結束</div></div>
+      </div>
+      <div class="meter done"><i style="width:100%"></i></div>
+      <div class="card-foot"><div class="points"><span>滿萬折千</span></div></div>
+    </div>
+  </div>
+</body>
+</html>
