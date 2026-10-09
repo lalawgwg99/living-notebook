@@ -3,102 +3,58 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>活筆記 — 會自己長大的筆記本</title>
-<meta name="description" content="把看到的影片和文章丟進來，筆記本自動分類、長出多個大腦，自己分裂、進化。想看重點時，問它就好。">
+<title>活筆記 — 檔期管理</title>
+<meta name="description" content="DM、型錄、活動訊息丟進來，自動整理成檔期，標出截止日並提醒。">
 <link rel="stylesheet" href="style.css">
 <script src="config.js"></script>
 </head>
 <body>
 <div id="app">
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-orb" id="brandOrb" aria-hidden="true"></span>
-      <span class="brand-name">活筆記</span>
-    </div>
+    <div class="brand"><span class="brand-dot" id="activityDot" aria-hidden="true"></span><span class="brand-name">活筆記</span></div>
+    <input id="searchInput" class="search" type="search" placeholder="搜尋活動、品牌…" autocomplete="off">
     <div class="topbar-actions">
-      <input id="searchInput" class="search" type="search" placeholder="搜尋活動、品牌、標籤…" autocomplete="off">
+      <button id="assistantBtn" class="icon-btn" aria-label="AI 助手">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
+      </button>
       <button id="addBtn" class="btn-primary">＋ 新增</button>
     </div>
   </header>
 
-  <main class="layout">
-    <!-- 左：主人格＋大腦們 -->
-    <aside class="side">
-      <div class="persona-mini" id="personaCard">
-        <div class="persona-mini-orb" id="personaOrb"><span id="personaEmoji">📓</span></div>
-        <div class="persona-mini-info">
-          <div class="persona-mini-name" id="personaName">一本空白的筆記本</div>
-          <div class="persona-mini-mood" id="personaMood">還沒醒來</div>
-        </div>
-      </div>
-      <p class="persona-mini-greeting" id="personaGreeting">把 DM、活動訊息丟進來，我會整理成檔期，標出截止日並提醒你。</p>
+  <div class="phase-bar"><div class="phase-chips" id="phaseChips"></div></div>
 
-      <div class="phase-filter">
-        <div class="phase-head"><span>檔期</span></div>
-        <div id="phaseList"></div>
+  <main class="main">
+    <div class="expiry-banner hidden" id="expiryBanner"></div>
+    <div class="cards" id="notesGrid"></div>
+    <div class="empty-state" id="emptyState">
+      <div class="empty-mark" aria-hidden="true">
+        <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <rect x="16" y="22" width="64" height="58" rx="9"/>
+          <line x1="16" y1="38" x2="80" y2="38"/>
+          <line x1="34" y1="12" x2="34" y2="26"/>
+          <line x1="62" y1="12" x2="62" y2="26"/>
+          <circle cx="48" cy="58" r="11"/>
+          <line x1="48" y1="58" x2="48" y2="51"/>
+          <line x1="48" y1="58" x2="53" y2="60"/>
+        </svg>
       </div>
-
-      <div class="brains-head">
-        <span>大腦們</span>
-        <span class="brains-count" id="brainsCount"></span>
-      </div>
-      <div class="brains-view-toggle" role="tablist" aria-label="大腦顯示方式">
-        <button class="view-btn active" id="viewListBtn">清單</button>
-        <button class="view-btn" id="viewSkyBtn">星系</button>
-      </div>
-      <nav class="brain-list" id="brainList"></nav>
-      <div class="constellation-wrap hidden" id="constellationWrap">
-        <canvas id="brainCanvas"></canvas>
-        <p class="constellation-hint">點一顆星球，進入那個大腦的世界</p>
-      </div>
-
-      <p class="auto-hint">新增的活動會自動分類歸檔</p>
-      <div class="side-stats">
-        <span><b id="statNotes">0</b> 則收藏</span>
-        <span><b id="statPoints">0</b> 個重點</span>
-      </div>
-    </aside>
-
-    <!-- 右：腦內世界 -->
-    <section class="notes-col">
-      <div class="expiry-banner hidden" id="expiryBanner"></div>
-      <div class="brain-detail hidden" id="brainDetail"></div>
-      <div class="notes-grid" id="notesGrid"></div>
-      <div class="empty-state" id="emptyState">
-        <div class="empty-mark" aria-hidden="true">
-          <svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
-            <rect x="16" y="22" width="64" height="58" rx="9"/>
-            <line x1="16" y1="38" x2="80" y2="38"/>
-            <line x1="34" y1="12" x2="34" y2="26"/>
-            <line x1="62" y1="12" x2="62" y2="26"/>
-            <circle cx="48" cy="58" r="11"/>
-            <line x1="48" y1="58" x2="48" y2="51"/>
-            <line x1="48" y1="58" x2="53" y2="60"/>
-          </svg>
-        </div>
-        <h2>尚無活動資訊</h2>
-        <p>上傳第一張 DM，自動辨識活動名稱、日期與優惠規則，<br>到期前會提醒你。</p>
-        <button class="btn-primary" id="emptyAddBtn">新增第一筆</button>
-      </div>
-    </section>
-
-    <!-- 右欄：AI 助手（桌面版固定側欄） -->
-    <aside class="chat-col" id="chatCol">
-      <div class="chat-panel" id="chatPanel">
-        <div class="chat-head">
-          <span class="chat-title">AI 助手</span>
-          <button class="chat-close" id="chatClose">✕</button>
-        </div>
-        <div class="chat-body" id="chatBody"></div>
-        <div class="chat-input-row">
-          <input id="chatInput" type="text" placeholder="例如：這週有哪些活動到期？" autocomplete="off">
-          <button id="chatSend" class="btn-primary">送出</button>
-        </div>
-      </div>
-    </aside>
+      <h2>尚無活動</h2>
+      <p>新增第一筆 DM，自動辨識檔期與截止日。</p>
+      <button class="btn-primary" id="emptyAddBtn">新增</button>
+    </div>
   </main>
 
-  <button id="chatFab" class="chat-fab" aria-label="開啟 AI 助手">💬</button>
+  <aside class="assistant-panel hidden" id="assistantPanel" aria-label="AI 助手">
+    <div class="assistant-head">
+      <span>AI 助手</span>
+      <button class="icon-btn" id="assistantClose" aria-label="關閉">✕</button>
+    </div>
+    <div class="chat-body" id="chatBody"></div>
+    <div class="chat-input-row">
+      <input id="chatInput" type="text" placeholder="例如：這週有哪些活動到期？" autocomplete="off">
+      <button id="chatSend" class="btn-primary">送出</button>
+    </div>
+  </aside>
 
   <div class="modal-backdrop hidden" id="modalBackdrop">
     <div class="modal">
@@ -118,7 +74,6 @@
       </div>
       <div class="modal-pane hidden" id="paneImage">
         <div class="dropzone" id="imgDrop" role="button" tabindex="0" aria-label="選擇圖片">
-          <div class="dropzone-icon">📷</div>
           <div class="dropzone-text">選擇圖片 / 拖入此處（可多選）<br><span>或直接 Ctrl+V 貼上截圖</span></div>
         </div>
         <input type="file" id="imgFile" accept="image/*" multiple class="hidden">
@@ -128,7 +83,6 @@
       </div>
       <div class="modal-pane hidden" id="panePdf">
         <div class="dropzone" id="pdfDrop" role="button" tabindex="0" aria-label="選擇PDF">
-          <div class="dropzone-icon">📄</div>
           <div class="dropzone-text">點此選擇 / 拖入 PDF 型錄<br><span>自動抽出文字整理成重點</span></div>
         </div>
         <input type="file" id="pdfFile" accept="application/pdf" class="hidden">
@@ -143,13 +97,12 @@
     </div>
   </div>
 
-  <!-- 手動補充對話框 -->
   <div class="modal-backdrop hidden" id="suppBackdrop">
     <div class="modal">
-      <h3 class="supp-title">✏️ 幫它補充內容</h3>
-      <p class="modal-note" id="suppDesc">這支影片穿了隱形衣，我抓不到內容。把你記得的、或影片下方的簡介貼上來，我來整理成重點。</p>
+      <h3 class="supp-title">補充內容</h3>
+      <p class="modal-note" id="suppDesc">抓不到這個連結的內容。把你記得的內容貼上來，我來整理。</p>
       <div class="modal-pane">
-        <textarea id="suppText" rows="6" placeholder="貼上影片簡介、字幕，或你記得的內容…"></textarea>
+        <textarea id="suppText" rows="6" placeholder="貼上簡介、字幕，或你記得的內容…"></textarea>
       </div>
       <div class="modal-actions">
         <button class="btn-ghost" id="suppCancel">取消</button>
@@ -170,6 +123,6 @@
     <input type="file" id="importFile" accept="application/json" class="hidden">
   </footer>
 </div>
-<script src="app.js?v=20261009f"></script>
+<script src="app.js?v=20261009g"></script>
 </body>
 </html>

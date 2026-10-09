@@ -51,7 +51,7 @@ function toast(msg, ms) {
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, ms || 3200);
 }
 
-/* 餵食吸收特效：同心光圈＋😋 */
+/* 餵食吸收特效：同心光圈 */
 function absorbBurst() {
   const fx = $('absorbFx');
   if (!fx) return;
@@ -88,11 +88,11 @@ function phaseOf(n) {
 function countdownChip(n) {
   const d = daysUntil(n.eventEnd);
   if (d === null) return '';
-  if (d < 0) return `<span class="countdown-chip ended">已結束</span>`;
-  if (d === 0) return `<span class="countdown-chip urgent">今天到期</span>`;
-  if (d <= 3) return `<span class="countdown-chip urgent">剩 ${d} 天</span>`;
-  if (d <= 7) return `<span class="countdown-chip soon">剩 ${d} 天</span>`;
-  return `<span class="countdown-chip active">剩 ${d} 天</span>`;
+  if (d < 0) return `<span class="countdown ended">已結束</span>`;
+  if (d === 0) return `<span class="countdown urgent">今天到期</span>`;
+  if (d <= 3) return `<span class="countdown urgent">剩 ${d} 天</span>`;
+  if (d <= 7) return `<span class="countdown soon">剩 ${d} 天</span>`;
+  return `<span class="countdown active">剩 ${d} 天</span>`;
 }
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -145,7 +145,7 @@ function downloadICS(n) {
   a.download = `${(n.eventName || n.title || '活動').slice(0, 20)}.ics`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  toast('📅 已匯出行事曆');
+  toast('已匯出行事曆');
 }
 
 /* ---------------- 資料 ---------------- */
@@ -154,7 +154,7 @@ let brains = load(LS_BRAINS, []);
 // 舊版筆記沒有 brainId → 視為待分類
 notes.forEach((n) => { if (!('brainId' in n)) n.brainId = null; });
 let persona = load(LS_PERSONA, null) || {
-  name: null, mood: '就緒', color: '#4a6fa5', emoji: '📋',
+  name: null, mood: '就緒', color: '#4a6fa5',
   greeting: '把 DM、活動訊息丟進來，我會整理成檔期，標出截止日並提醒你。',
   traits: [], bio: '', absorbedCount: 0, updatedAt: null,
 };
@@ -179,15 +179,15 @@ function brainTags(b) {
 
 /* ---------------- 主人格 ---------------- */
 function renderPersona(growing) {
+  if (!$('personaMood')) return;  // v5：側欄 UI 已移除
   document.documentElement.style.setProperty('--mood', persona.color || '#c2703d');
-  $('personaEmoji').textContent = persona.emoji || '📓';
   $('personaMood').textContent = persona.mood || '';
   $('personaName').textContent = persona.name || '檔期助手';
   $('personaGreeting').textContent = persona.greeting || '';
   $('statNotes').textContent = notes.length;
   $('statPoints').textContent = notes.reduce((a, n) => a + (n.keyPoints ? n.keyPoints.length : 0), 0);
   if (growing) {
-    const orb = $('personaOrb');
+    const orb = $('activityDot');
     orb.classList.remove('growing'); void orb.offsetWidth; orb.classList.add('growing');
   }
 }
@@ -197,10 +197,10 @@ async function absorbHost(silent) {
   const target = (pool.length ? pool : notes).slice(0, 12);
   if (target.length === 0) { if (!silent) toast('還沒有筆記可以吸收'); return; }
   const ab = $('absorbBtn');
-  if (!silent && ab) { ab.disabled = true; ab.textContent = '🌀 長大中…'; }
+  if (!silent && ab) { ab.disabled = true; ab.textContent = '吸收中…'; }
   try {
     const d = await aiTask('notebook-absorb', {
-      persona: { name: persona.name, mood: persona.mood, emoji: persona.emoji, traits: persona.traits, bio: persona.bio },
+      persona: { name: persona.name, mood: persona.mood, traits: persona.traits, bio: persona.bio },
       notes: target.map((n) => ({ title: n.title, summary: n.summary, tags: n.tags })),
     });
     const p = extractJSON(d.text);
@@ -208,7 +208,6 @@ async function absorbHost(silent) {
     if (p.name && p.name.trim()) persona.name = p.name.trim().slice(0, 12);
     persona.mood = String(p.mood).slice(0, 16);
     const c = validColor(p.color); if (c) persona.color = c;
-    if (p.emoji && p.emoji.trim()) persona.emoji = [...p.emoji.trim()][0];
     if (p.greeting) persona.greeting = String(p.greeting).slice(0, 120);
     if (Array.isArray(p.traits)) persona.traits = p.traits.filter((t) => typeof t === 'string').map((t) => t.slice(0, 12)).slice(0, 6);
     if (p.bio) persona.bio = String(p.bio).slice(0, 200);
@@ -216,13 +215,13 @@ async function absorbHost(silent) {
     save(LS_PERSONA, persona); save(LS_NOTES, notes);
     renderAll(true);
     if (p.comment && !silent) { pushChatMsg('bot', String(p.comment).slice(0, 120)); openChat(); }
-    else if (!silent) toast('主人格長大了 ✨');
+    else if (!silent) toast('已更新');
   } catch (e) {
     if (!silent) toast('這次沒能好好思考，下次再試');
   } finally {
     if (!silent) {
       const ab2 = $('absorbBtn');
-      if (ab2) { ab2.disabled = false; ab2.textContent = '🌀 主人格吸收長大'; }
+      if (ab2) { ab2.disabled = false; ab2.textContent = '主人格吸收長大'; }
     }
   }
 }
@@ -235,19 +234,18 @@ const PHASES = [
   { id: 'ended', name: '已結束', color: '#a89d8c' },
 ];
 function renderPhases() {
-  const el = $('phaseList');
+  const el = $('phaseChips');
   if (!el) return;
-  const counts = { active: 0, expiring: 0, upcoming: 0, ended: 0 };
+  const counts = { all: notes.length, active: 0, expiring: 0, upcoming: 0, ended: 0 };
   notes.forEach((n) => {
     const p = phaseOf(n);
     if (p === 'nodate') counts.active++;
     else if (counts[p] !== undefined) counts[p]++;
   });
-  el.innerHTML = PHASES.map((p) =>
-    `<button class="phase-row ${selectedPhase === p.id ? 'active' : ''}" data-phase="${p.id}">
-      <span class="phase-dot" style="background:${p.color}"></span>
-      <span class="phase-row-name">${p.name}</span>
-      <span class="phase-row-count">${counts[p.id]} 則</span>
+  const items = [{ id: 'all', name: '全部', color: '#a79c8b' }, ...PHASES];
+  el.innerHTML = items.map((p) =>
+    `<button class="phase-chip ${selectedPhase === p.id ? 'active' : ''}" data-phase="${p.id}">
+      <span class="dot" style="background:${p.color}"></span>${p.name}<span class="n">${counts[p.id]}</span>
     </button>`).join('');
 }
 /* 到期橫幅：7 天內到期的活動 */
@@ -272,20 +270,21 @@ function renderExpiryBanner() {
 /* ---------------- 大腦列表 ---------------- */
 function renderBrains() {
   const list = $('brainList');
+  if (!list) return;  // v5：側欄 UI 已移除
   const inboxCount = notes.filter((n) => !n.brainId).length;
   let html = `<button class="brain-row all ${selectedBrain === 'all' ? 'active' : ''}" data-brain="all">
-      <span class="brain-dot">🌱</span><span class="brain-row-name">全部</span>
+      <span class="brain-dot"></span><span class="brain-row-name">全部</span>
       <span class="brain-row-meta">${notes.length} 則</span></button>`;
   if (inboxCount > 0) {
     html += `<button class="brain-row inbox ${selectedBrain === 'inbox' ? 'active' : ''}" data-brain="inbox">
-      <span class="brain-dot">📥</span><span class="brain-row-name">待分類</span>
+      <span class="brain-dot"></span><span class="brain-row-name">待分類</span>
       <span class="brain-row-meta">${inboxCount} 則</span></button>`;
   }
   activeBrains().forEach((b) => {
     const n = brainNotes(b.id).length;
     html += `<button class="brain-row ${selectedBrain === b.id ? 'active' : ''}" data-brain="${b.id}"
         style="--brain-color:${esc(b.color || '#c2703d')}" id="brow-${b.id}">
-      <span class="brain-dot">${esc(b.emoji || '🧠')}</span>
+      <span class="brain-dot"></span>
       <span class="brain-row-name">${esc(b.name)}</span>
       <span class="brain-row-meta">Lv.${b.level || 1} · ${n}則</span></button>`;
   });
@@ -298,6 +297,7 @@ function renderBrains() {
 /* ---------------- 大腦星系（神經突觸視圖） ---------------- */
 function setBrainView(v) {
   brainView = v;
+  if (!$('viewListBtn')) return;  // v5：側欄 UI 已移除
   $('viewListBtn').classList.toggle('active', v === 'list');
   $('viewSkyBtn').classList.toggle('active', v === 'sky');
   $('brainList').classList.toggle('hidden', v !== 'list');
@@ -384,7 +384,8 @@ function startConstellation() {
       ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r, 0, 6.29); ctx.stroke();
       ctx.font = `${Math.round(nd.r * 1.05)}px serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(nd.b.emoji || '🧠', nd.x, nd.y + 1);
+      ctx.fillStyle = nd.b.color || '#c2703d';
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r * 0.42, 0, 6.29); ctx.fill();
       ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.88)';
       ctx.fillText(String(nd.b.name).slice(0, 8), nd.x, nd.y + nd.r + 11);
     });
@@ -400,7 +401,7 @@ function startConstellation() {
     if (best) {
       selectedBrain = best.b.id;
       renderBrains(); renderBrainDetail(); renderNotes();
-      toast(`進入「${best.b.name}」的世界 ✨`);
+      toast(`進入「${best.b.name}」`);
     }
   };
   if (reduced) { draw(0); return; }
@@ -411,13 +412,14 @@ function startConstellation() {
 /* ---------------- 腦內詳情 ---------------- */
 function renderBrainDetail() {
   const el = $('brainDetail');
+  if (!el) return;  // v5：側欄 UI 已移除
   if (selectedBrain === 'all' || selectedBrain === 'inbox') {
     if (selectedBrain === 'inbox') {
       el.classList.remove('hidden');
-      el.innerHTML = `<div class="brain-detail-head"><span class="brain-detail-emoji">📥</span>
+      el.innerHTML = `<div class="brain-detail-head"><span class="brain-dot" style="--brain-color:#e8e0cd"></span>
         <div><h2 class="brain-detail-name">待分類</h2>
         <p class="brain-detail-desc">這些還沒被大腦認領。按一下，讓 AI 幫它們找到家。</p></div></div>
-        <button class="btn-primary" id="classifyAllBtn">✨ 一鍵自動分類</button>`;
+        <button class="btn-primary" id="classifyAllBtn">一鍵自動分類</button>`;
       const btn = $('classifyAllBtn');
       if (btn) btn.onclick = classifyInbox;
     } else el.classList.add('hidden');
@@ -430,12 +432,12 @@ function renderBrainDetail() {
   const lv = Math.min(5, Math.max(1, b.level || 1));
   const dots = '●'.repeat(lv) + '○'.repeat(5 - lv);
   const gaps = (b.gaps || []).length
-    ? `<div class="brain-gaps"><span class="gaps-label">🧠 想學的：</span>${b.gaps.map((g) => `<span class="gap-chip">${esc(g)}</span>`).join('')}</div>` : '';
-  const born = b.spawnReason ? `<div class="brain-born">🌱 誕生原因：${esc(b.spawnReason)}</div>`
-    : b.parentId ? `<div class="brain-born">🔀 從「${esc((brainById(b.parentId) || {}).name || '母腦')}」分裂而來</div>` : '';
+    ? `<div class="brain-gaps"><span class="gaps-label">想學的：</span>${b.gaps.map((g) => `<span class="gap-chip">${esc(g)}</span>`).join('')}</div>` : '';
+  const born = b.spawnReason ? `<div class="brain-born">誕生原因：${esc(b.spawnReason)}</div>`
+    : b.parentId ? `<div class="brain-born">從「${esc((brainById(b.parentId) || {}).name || '母腦')}」分裂而來</div>` : '';
   el.innerHTML = `
     <div class="brain-detail-head">
-      <span class="brain-detail-emoji">${esc(b.emoji || '🧠')}</span>
+      <span class="brain-dot"></span>
       <div><h2 class="brain-detail-name">${esc(b.name)}</h2>
       <p class="brain-detail-desc">${esc(b.description || '')}</p></div>
       <span class="brain-level"><span class="dots">${dots}</span> Lv.${lv}</span>
@@ -557,7 +559,7 @@ async function saveSupplement() {
 async function addLinkNote(url) {
   if (pipelining) return;
   pipelining = true;
-  $('personaOrb').classList.add('working');
+  $('activityDot').classList.add('working');
   $('modalLoading').classList.remove('hidden');
   $('modalPipeline').innerHTML = '';
   $('modalSave').disabled = true;
@@ -600,7 +602,7 @@ async function addLinkNote(url) {
     closeModal(true); renderAll();
   } finally {
     pipelining = false;
-    $('personaOrb').classList.remove('working');
+    $('activityDot').classList.remove('working');
     $('modalLoading').classList.add('hidden');
     $('modalSave').disabled = false;
     $('linkUrl').value = '';
@@ -705,7 +707,7 @@ async function addImageNotes() {
   const queue = pendingImages.splice(0, pendingImages.length);
   renderImgPreviews();
   $('imgHint').value = '';
-  $('personaOrb').classList.add('working');
+  $('activityDot').classList.add('working');
   $('modalLoading').classList.remove('hidden');
   $('modalPipeline').innerHTML = '';
   $('modalSave').disabled = true;
@@ -757,7 +759,7 @@ async function addImageNotes() {
     toast(okCount === queue.length ? `完成，共新增 ${okCount} 張` : `完成 ${okCount}/${queue.length} 張`);
   } finally {
     pipelining = false;
-    $('personaOrb').classList.remove('working');
+    $('activityDot').classList.remove('working');
     $('modalLoading').classList.add('hidden');
     $('modalSave').disabled = false;
   }
@@ -765,7 +767,7 @@ async function addImageNotes() {
 async function addPdfNote(file) {
   if (pipelining || !file) return;
   pipelining = true;
-  $('personaOrb').classList.add('working');
+  $('activityDot').classList.add('working');
   $('modalLoading').classList.remove('hidden');
   $('modalPipeline').innerHTML = '';
   $('modalSave').disabled = true;
@@ -797,7 +799,7 @@ async function addPdfNote(file) {
     toast('PDF 處理失敗，再試一次');
   } finally {
     pipelining = false;
-    $('personaOrb').classList.remove('working');
+    $('activityDot').classList.remove('working');
     $('modalLoading').classList.add('hidden');
     $('modalSave').disabled = false;
   }
@@ -806,7 +808,7 @@ async function addPdfNote(file) {
 async function addTextNote(title, body) {
   if (pipelining) return;
   pipelining = true;
-  $('personaOrb').classList.add('working');
+  $('activityDot').classList.add('working');
   $('modalLoading').classList.remove('hidden');
   $('modalPipeline').innerHTML = '';
   $('modalSave').disabled = true;
@@ -838,7 +840,7 @@ async function addTextNote(title, body) {
     $('textTitle').value = ''; $('textBody').value = '';
   } finally {
     pipelining = false;
-    $('personaOrb').classList.remove('working');
+    $('activityDot').classList.remove('working');
     $('modalLoading').classList.add('hidden');
     $('modalSave').disabled = false;
   }
@@ -884,7 +886,6 @@ function makeBrain(b) {
   return {
     id: uid('b'),
     name: String(b.name || '新大腦').slice(0, 10),
-    emoji: (b.emoji && [...String(b.emoji).trim()][0]) || '🧠',
     color: validColor(b.color) || '#8a7fd6',
     description: String(b.description || '').slice(0, 40),
     summary: '', gaps: [], level: 1,
@@ -949,7 +950,7 @@ async function evolveBrain(brainId, newNote) {
       const targetBrain = b.id;
       notes.unshift({
         id: uid(), type: 'synth', ai: true,
-        title: '🤖 ' + String(evo.synthesis.title || '腦的思考').slice(0, 30),
+        title: String(evo.synthesis.title || '腦的思考').slice(0, 30),
         body: String(evo.synthesis.body).slice(0, 400),
         summary: '', keyPoints: [], tags: brainTags(b).slice(0, 3),
         brainId: targetBrain, createdAt: Date.now(),
@@ -991,63 +992,39 @@ function filteredNotes() {
 }
 
 function noteCard(n, idx) {
-  const pts = (n.keyPoints || []).slice(0, 5);
-  const fresh = freshIds.has(n.id);
-  const ptsHtml = pts.length
-    ? `<ul class="note-points collapsed" id="pts-${n.id}">${pts.map((p) => `<li class="${fresh ? 'hl-fresh' : ''}">${esc(p)}</li>`).join('')}</ul>
-       ${pts.length > 2 ? `<button class="points-toggle" data-toggle="${n.id}">展開全部重點 ▾</button>` : ''}`
-    : '';
-  const tagsHtml = (n.tags || []).length
-    ? `<div class="note-tags">${n.tags.map((t) => `<span class="note-tag">${esc(t)}</span>`).join('')}</div>` : '';
-  const titleHtml = n.url
-    ? `<h3 class="note-title"><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title || n.url)}</a></h3>`
-    : `<h3 class="note-title">${esc(n.title || '未命名筆記')}</h3>`;
   const b = n.brainId && brainById(n.brainId);
-  const brainHtml = b ? `<div class="note-brain">${esc(b.emoji)} ${esc(b.name)}</div>` : '';
-  const bodyHtml = n.body ? `<p class="note-summary">${esc(n.body.slice(0, 200))}${n.body.length > 200 ? '…' : ''}</p>` : '';
-  const thumbHtml = n.image ? `<img class="note-thumb" src="${n.image}" alt="DM圖片" loading="lazy">` : '';
-
-  // 檔期資訊：倒數徽章＋日期區間＋品牌
-  let eventHtml = '';
-  const chip = countdownChip(n);
-  if (chip || n.eventStart || n.eventEnd) {
-    const range = (n.eventStart || n.eventEnd)
-      ? `<span class="event-dates"><b>${fmtDay(n.eventStart) || '?'}</b> – <b>${fmtDay(n.eventEnd) || '?'}</b>${n.brand ? ` · ${esc(n.brand)}` : ''}</span>` : '';
-    eventHtml = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${chip}${range}</div>`;
-  }
-  const typeLabel = n.type === 'link' ? '連結' : n.type === 'synth' ? '腦的思考'
-    : n.type === 'image' ? '圖片' : n.type === 'pdf' ? 'PDF' : '文字';
-
-  // 抓不到內容：溫柔的求救卡片
-  let helpHtml = '';
-  let actionsHtml = '';
+  const cd = countdownChip(n);
+  const dates = (n.eventStart || n.eventEnd)
+    ? `${fmtDay(n.eventStart) || '?'} – ${fmtDay(n.eventEnd) || '?'}${n.brand ? ' · ' + esc(n.brand) : ''}` : '';
+  const thumb = n.image ? `<img class="card-thumb" src="${n.image}" alt="" loading="lazy">` : '';
+  const pts = (n.keyPoints || []).slice(0, 3).map((p) => `<span class="pt">${esc(p)}</span>`).join('');
   const failed = n.needsHelp || (n.type === 'link' && !n.summary && !(n.keyPoints || []).length);
-  if (failed) {
-    helpHtml = `<p class="needs-help-msg"><b>抓不到內容</b>，你可以幫我補充，我來整理成重點。</p>`;
-    actionsHtml = `<div class="note-actions has-actions">
-        <button class="btn-mini" data-act="supplement">幫我補充</button>
-        <button class="btn-mini ghost" data-act="retry">↻ 重抓</button>
-      </div>`;
-  } else if (n.eventEnd) {
-    actionsHtml = `<div class="note-actions has-actions">
-        <button class="btn-ics" data-act="ics">加入行事曆</button>
-      </div>`;
-  }
-  const delay = Math.min((idx || 0) * 60, 600);
-  return `<article class="note-card ${n.type === 'synth' ? 'synth' : ''} ${failed ? 'needs-help' : ''}" data-id="${n.id}" style="animation-delay:${delay}ms">
-    <button class="note-del" data-act="del" title="刪除">×</button>
-    <div class="note-top">
-      <span class="note-type">${typeLabel}</span>
-      <span class="note-date">${fmtDate(n.createdAt)}</span>
+  const helpHtml = failed ? `<p class="needs-help-msg"><b>抓不到內容</b>，你可以幫我補充，我來整理成重點。</p>` : '';
+  const actionsHtml = failed
+    ? `<button class="btn-mini" data-act="supplement">幫我補充</button><button class="btn-mini ghost" data-act="retry">↻ 重抓</button>`
+    : (n.eventEnd ? `<button class="btn-ics" data-act="ics">加入行事曆</button>` : '');
+  const titleHtml = n.url
+    ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title || n.url)}</a>`
+    : esc(n.title || '未命名');
+  const delay = Math.min((idx || 0) * 50, 400);
+  return `<article class="card${failed ? ' needs-help' : ''}" data-id="${n.id}" style="animation-delay:${delay}ms">
+    <button class="card-del" data-act="del" title="刪除">×</button>
+    ${thumb}
+    <div class="card-body">
+      <div class="card-top">
+        <span class="card-title">${titleHtml}</span>
+        ${cd}
+      </div>
+      ${dates ? `<div class="card-sub">${dates}</div>` : ''}
+      ${n.summary ? `<p class="card-summary">${esc(n.summary)}</p>` : ''}
+      ${(!n.summary && n.body) ? `<p class="card-summary">${esc(n.body.slice(0, 120))}</p>` : ''}
+      ${pts ? `<div class="card-points">${pts}</div>` : ''}
+      ${helpHtml}
+      <div class="card-foot">
+        <span class="brain-tag">${b ? esc(b.name) : ''}</span>
+        <span class="card-actions">${actionsHtml}</span>
+      </div>
     </div>
-    ${titleHtml}
-    ${eventHtml}
-    ${thumbHtml}
-    ${n.summary ? `<p class="note-summary">${esc(n.summary)}</p>` : ''}
-    ${bodyHtml}
-    ${helpHtml}
-    ${ptsHtml}${tagsHtml}${brainHtml}
-    ${actionsHtml}
   </article>`;
 }
 
@@ -1096,10 +1073,9 @@ function renderChat() {
 function jumpToNote(id) {
   const n = notes.find((x) => x.id === id);
   if (!n) return;
-  selectedBrain = (n.brainId && brainById(n.brainId)) ? n.brainId : 'all';
   renderAll();
   toast('已定位到相關筆記');
-  const card = document.querySelector(`.note-card[data-id="${id}"]`);
+  const card = document.querySelector(`.card[data-id="${id}"]`);
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function openChat() {
@@ -1107,15 +1083,15 @@ function openChat() {
   if (chatHistory.length === 0) {
     pushChatMsg('bot', '你好，我是你的檔期助手。問我任何活動的日期、優惠或到期資訊。');
   } else renderChat();
-  setTimeout(() => $('chatInput').focus(), 50);
 }
-/* 桌面版助手固定在右欄；手機版才用浮動開關 */
-function isDesktopChat() { return window.matchMedia('(min-width: 1100px)').matches; }
+/* AI 助手：右側滑出面板 */
 function setChatOpen(open) {
-  if (isDesktopChat()) return;
-  $('chatCol').classList.toggle('open', open);
+  const p = $('assistantPanel');
+  if (!p) return;
+  p.classList.toggle('hidden', !open);
+  if (open) setTimeout(() => $('chatInput') && $('chatInput').focus(), 120);
 }
-function isChatOpen() { return isDesktopChat() || $('chatCol').classList.contains('open'); }
+function isChatOpen() { const p = $('assistantPanel'); return p && !p.classList.contains('hidden'); }
 /* ---------------- 台股即時報價（瀏覽器直連證交所，有開 CORS） ---------------- */
 const TW_STOCK_NAMES = {
 '0050': '元大台灣50', '00631L': '元大台灣50正2', '00646': '元大S&P500',
@@ -1174,8 +1150,7 @@ async function askChat() {
   if (!q || chatting) return;
   chatting = true;
   $('chatSend').disabled = true;
-  $('chatFab').classList.add('thinking');
-  $('personaOrb').classList.add('working');
+  $('activityDot').classList.add('working');
   input.value = '';
   pushChatMsg('user', q);
   const ctx = retrieve(q, 5);
@@ -1208,8 +1183,7 @@ async function askChat() {
   } finally {
     chatting = false;
     $('chatSend').disabled = false;
-    $('chatFab').classList.remove('thinking');
-    $('personaOrb').classList.remove('working');
+    $('activityDot').classList.remove('working');
   }
 }
 
@@ -1284,7 +1258,7 @@ async function saveNote() {
 }
 
 /* ---------------- 事件 ---------------- */
-function renderAll(growing) { renderPersona(growing); renderPhases(); renderBrains(); renderBrainDetail(); renderExpiryBanner(); renderNotes(); }
+function renderAll() { renderPhases(); renderExpiryBanner(); renderNotes(); }
 function bind() {
   $('addBtn').onclick = openModal;
   $('emptyAddBtn').onclick = () => { setModalTab('image'); openModal(); };
@@ -1322,7 +1296,7 @@ function bind() {
     if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) { toast('請選擇 PDF 檔'); return; }
     pendingPdf = f;
     $('pdfName').textContent = `已選：${f.name}`;
-    toast('PDF 就緒，按「丟進筆記本」開始整理');
+    toast('PDF 就緒，按「新增」開始整理');
   });
   // Ctrl+V 貼圖片（圖片分頁開啟時，可多張）
   document.addEventListener('paste', (e) => {
@@ -1341,10 +1315,10 @@ function bind() {
   });
 
   /* 檔期篩選 */
-  $('phaseList').addEventListener('click', (e) => {
-    const row = e.target.closest('[data-phase]');
-    if (!row) return;
-    selectedPhase = selectedPhase === row.dataset.phase ? 'all' : row.dataset.phase;
+  $('phaseChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('[data-phase]');
+    if (!chip) return;
+    selectedPhase = chip.dataset.phase;
     renderPhases(); renderExpiryBanner(); renderNotes();
   });
   /* 到期橫幅 → 跳到該筆記 */
@@ -1354,21 +1328,8 @@ function bind() {
   });
 
   $('searchInput').addEventListener('input', (e) => { searchKw = e.target.value; renderNotes(); });
-  $('brainList').addEventListener('click', (e) => {
-    const row = e.target.closest('[data-brain]');
-    if (!row) return;
-    selectedBrain = row.dataset.brain;
-    renderBrains(); renderBrainDetail(); renderNotes();
-  });
   $('notesGrid').addEventListener('click', (e) => {
-    const tg = e.target.closest('[data-toggle]');
-    if (tg) {
-      const ul = $('pts-' + tg.dataset.toggle);
-      const collapsed = ul.classList.toggle('collapsed');
-      tg.textContent = collapsed ? '展開全部重點 ▾' : '收合 ▴';
-      return;
-    }
-    const card = e.target.closest('.note-card');
+    const card = e.target.closest('.card');
     if (!card) return;
     const id = card.dataset.id;
     const act = e.target.closest('[data-act]');
@@ -1383,7 +1344,7 @@ function bind() {
         act.classList.add('confirming');
         act.textContent = '確定？';
         setTimeout(() => {
-          const b = document.querySelector(`.note-card[data-id="${id}"] .note-del.confirming`);
+          const b = document.querySelector(`.card[data-id="${id}"] .card-del.confirming`);
           if (b) { b.classList.remove('confirming'); b.textContent = '×'; }
         }, 3000);
       }
@@ -1397,11 +1358,8 @@ function bind() {
     }
   });
 
-  $('viewListBtn').onclick = () => setBrainView('list');
-  $('viewSkyBtn').onclick = () => setBrainView('sky');
-
-  $('chatFab').onclick = () => setChatOpen(!isChatOpen());
-  $('chatClose').onclick = () => setChatOpen(false);
+  $('assistantBtn').onclick = () => setChatOpen(!isChatOpen());
+  $('assistantClose').onclick = () => setChatOpen(false);
   $('chatSend').onclick = askChat;
   $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') askChat(); });
   $('chatBody').addEventListener('click', (e) => {
