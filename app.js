@@ -59,6 +59,95 @@ function absorbBurst() {
   setTimeout(() => fx.classList.remove('on'), 1000);
 }
 
+/* ---------------- 檔期日期工具 ---------------- */
+function parseDay(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim());
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return isNaN(d) ? null : d;
+}
+function todayMid() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+function daysUntil(dateStr) {
+  const d = parseDay(dateStr);
+  if (!d) return null;
+  return Math.round((d - todayMid()) / 86400000);
+}
+function fmtDay(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  return m ? `${+m[2]}/${+m[3]}` : '';
+}
+/* 檔期狀態：ended 已結束 / expiring 即將到期(≤3天) / upcoming 未開始 / active 進行中 / nodate 無日期 */
+function phaseOf(n) {
+  const dEnd = daysUntil(n.eventEnd), dStart = daysUntil(n.eventStart);
+  if (dEnd !== null && dEnd < 0) return 'ended';
+  if (dStart !== null && dStart > 0) return 'upcoming';
+  if (dEnd !== null && dEnd <= 3) return 'expiring';
+  if (n.eventEnd || n.eventStart) return 'active';
+  return 'nodate';
+}
+function countdownChip(n) {
+  const d = daysUntil(n.eventEnd);
+  if (d === null) return '';
+  if (d < 0) return `<span class="countdown-chip ended">已結束</span>`;
+  if (d === 0) return `<span class="countdown-chip urgent">⏰ 今天到期！</span>`;
+  if (d <= 3) return `<span class="countdown-chip urgent">⏰ 剩 ${d} 天</span>`;
+  if (d <= 7) return `<span class="countdown-chip soon">剩 ${d} 天</span>`;
+  return `<span class="countdown-chip active">剩 ${d} 天</span>`;
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+/* 圖片等比縮小 → dataURL */
+function downscaleImage(img, maxDim, quality) {
+  const r = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.round(img.naturalWidth * r), h = Math.round(img.naturalHeight * r);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', quality || 0.82);
+}
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+/* .ics 行事曆下載（含 3 天前提醒） */
+function downloadICS(n) {
+  if (!n.eventEnd) { toast('這則沒有活動日期'); return; }
+  const endD = parseDay(n.eventEnd); if (!endD) return;
+  const f = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const startD = parseDay(n.eventStart) || endD;
+  const afterEnd = new Date(endD); afterEnd.setDate(afterEnd.getDate() + 1);
+  const escICS = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n').slice(0, 200);
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//活筆記//檔期管家//TW',
+    'BEGIN:VEVENT',
+    `UID:${n.id}@living-notebook`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${f(startD)}`,
+    `DTEND;VALUE=DATE:${f(afterEnd)}`,
+    `SUMMARY:${escICS((n.eventName || n.title || '活動') + '（截止）')}`,
+    `DESCRIPTION:${escICS(n.summary || '')}`,
+    'BEGIN:VALARM', 'TRIGGER:-P3D', 'ACTION:DISPLAY', 'DESCRIPTION:活動即將到期', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  a.download = `${(n.eventName || n.title || '活動').slice(0, 20)}.ics`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('📅 已匯出行事曆');
+}
+
 /* ---------------- 資料 ---------------- */
 let notes = load(LS_NOTES, []);
 let brains = load(LS_BRAINS, []);
@@ -71,6 +160,7 @@ let persona = load(LS_PERSONA, null) || {
 };
 let chatHistory = load(LS_CHAT, []);
 let selectedBrain = 'all';   // 'all' | 'inbox' | brainId
+let selectedPhase = 'all';   // 'all' | 'active' | 'expiring' | 'upcoming' | 'ended'
 let searchKw = '';
 let pipelining = false;
 let chatting = false;
@@ -136,6 +226,48 @@ async function absorbHost(silent) {
       if (ab2) { ab2.disabled = false; ab2.textContent = '🌀 主人格吸收長大'; }
     }
   }
+}
+
+/* ---------------- 檔期篩選 ---------------- */
+const PHASES = [
+  { id: 'active', name: '進行中', emoji: '🟢', color: '#3d7a34' },
+  { id: 'expiring', name: '即將到期', emoji: '⏰', color: '#b3402e' },
+  { id: 'upcoming', name: '未開始', emoji: '🔵', color: '#4a6fa5' },
+  { id: 'ended', name: '已結束', emoji: '⚫', color: '#a89d8c' },
+];
+function renderPhases() {
+  const el = $('phaseList');
+  if (!el) return;
+  const counts = { active: 0, expiring: 0, upcoming: 0, ended: 0 };
+  notes.forEach((n) => {
+    const p = phaseOf(n);
+    if (p === 'nodate') counts.active++;
+    else if (counts[p] !== undefined) counts[p]++;
+  });
+  el.innerHTML = PHASES.map((p) =>
+    `<button class="phase-row ${selectedPhase === p.id ? 'active' : ''}" data-phase="${p.id}">
+      <span class="phase-dot" style="background:${p.color}"></span>
+      <span class="phase-row-name">${p.emoji} ${p.name}</span>
+      <span class="phase-row-count">${counts[p.id]} 則</span>
+    </button>`).join('');
+}
+/* 到期橫幅：7 天內到期的活動 */
+function renderExpiryBanner() {
+  const el = $('expiryBanner');
+  if (!el) return;
+  const list = notes
+    .filter((n) => { const d = daysUntil(n.eventEnd); return d !== null && d >= 0 && d <= 7; })
+    .sort((a, b) => daysUntil(a.eventEnd) - daysUntil(b.eventEnd))
+    .slice(0, 5);
+  if (!list.length || selectedPhase !== 'all') { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `⏰ <b>${list.length} 則活動即將到期</b>
+    <ul>${list.map((n) => {
+      const d = daysUntil(n.eventEnd);
+      const label = d === 0 ? '今天到期' : `剩 ${d} 天`;
+      return `<li><span>📎 ${esc(String(n.eventName || n.title || '未命名').slice(0, 20))}</span>
+        <button class="eb-go" data-id="${n.id}">${label} →</button></li>`;
+    }).join('')}</ul>`;
 }
 
 /* ---------------- 大腦列表 ---------------- */
@@ -476,25 +608,208 @@ async function addLinkNote(url) {
   }
 }
 
+/* 把 AI 回傳的日期欄位整理進筆記 */
+function applyEventFields(note, s) {
+  const cleanDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '').trim()) ? String(v).trim() : null;
+  const cleanStr = (v, max) => (v && String(v).trim()) ? String(v).trim().slice(0, max || 30) : null;
+  note.eventName = cleanStr(s.event_name, 30);
+  note.brand = cleanStr(s.brand, 20);
+  note.eventStart = cleanDate(s.event_start);
+  note.eventEnd = cleanDate(s.event_end);
+}
+async function finalizeNote(note, s, doneLabels) {
+  note.summary = String(s.summary || '').slice(0, 120);
+  note.keyPoints = Array.isArray(s.key_points) ? s.key_points.filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(0, 5) : [];
+  note.tags = Array.isArray(s.tags) ? s.tags.filter((x) => typeof x === 'string').map((x) => x.slice(0, 12)).slice(0, 5) : [];
+  applyEventFields(note, s);
+  notes.unshift(note); save(LS_NOTES, notes);
+  freshIds.add(note.id);
+  (doneLabels || []).forEach((t) => pipelineStep(t, true));
+  const s2 = pipelineStep('分類進大腦');
+  await routeNote(note);
+  s2.classList.add('done'); s2.textContent = '✓ 分類進大腦';
+  const s3 = pipelineStep('大腦進化中');
+  if (note.brainId) await evolveBrain(note.brainId, note);
+  s3.classList.add('done'); s3.textContent = '✓ 大腦進化完成';
+  maybeAbsorbHost();
+  absorbBurst();
+  closeModal(true); renderAll();
+}
+
+/* Tesseract 中文 OCR（瀏覽器端，免 key） */
+let tesseractWorker = null;
+async function ocrImage(dataURL, onProgress) {
+  await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+  if (!tesseractWorker) {
+    tesseractWorker = await Tesseract.createWorker('chi_tra', 1, {
+      logger: (m) => { if (m.status === 'recognizing text' && onProgress) onProgress(Math.round(m.progress * 100)); },
+    });
+  }
+  const { data: { text } } = await tesseractWorker.recognize(dataURL);
+  return (text || '').replace(/[ \t]+/g, ' ').trim();
+}
+/* pdf.js 抽文字（瀏覽器端，免 key） */
+async function extractPdfText(file, onProgress) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let text = '';
+  const pages = Math.min(pdf.numPages, 15);
+  for (let i = 1; i <= pages; i++) {
+    if (onProgress) onProgress(Math.round((i / pages) * 100));
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    text += tc.items.map((it) => it.str).join('') + '\n';
+    if (text.length > 9000) break;
+  }
+  return text.slice(0, 9000).trim();
+}
+
+let pendingImage = null;  // { dataURL, thumb }
+let pendingPdf = null;
+async function handleImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) { toast('請選擇圖片檔'); return; }
+  try {
+    const img = await loadImageFromFile(file);
+    pendingImage = {
+      dataURL: downscaleImage(img, 1600, 0.85),
+      thumb: downscaleImage(img, 480, 0.75),
+    };
+    const pv = $('imgPreview');
+    pv.src = pendingImage.thumb; pv.classList.remove('hidden');
+    toast('圖片就緒，按「丟進筆記本」開始辨識');
+  } catch { toast('圖片讀取失敗'); }
+}
+async function addImageNote() {
+  if (pipelining || !pendingImage) return;
+  pipelining = true;
+  const hint = $('imgHint').value.trim();
+  $('personaOrb').classList.add('working');
+  $('modalLoading').classList.remove('hidden');
+  $('modalPipeline').innerHTML = '';
+  $('modalSave').disabled = true;
+  try {
+    const s1 = pipelineStep('辨識圖片文字');
+    $('modalLoadingText').textContent = '正在讀圖片上的文字…';
+    const ocrText = await ocrImage(pendingImage.dataURL, (p) => {
+      $('modalLoadingText').textContent = `辨識圖片文字中 ${p}%…`;
+    });
+    s1.classList.add('done'); s1.textContent = '✓ 圖片文字辨識完成';
+    if (!ocrText || ocrText.replace(/\s/g, '').length < 10) {
+      toast('圖片上的文字太少，換張清楚一點的試試');
+      return;
+    }
+    $('modalLoadingText').textContent = 'AI 正在整理活動資訊…';
+    const d = await aiTask('notebook-summarize', {
+      title: hint || 'DM圖片',
+      text: (hint ? `補充說明：${hint}\n` : '') + ocrText.slice(0, 4000),
+    }, 60000);
+    const s = extractJSON(d.text);
+    if (!s || !s.summary) throw new Error('bad-json');
+    const note = {
+      id: uid(), type: 'image',
+      title: (hint || s.event_name || 'DM圖片').slice(0, 30),
+      image: pendingImage.thumb,
+      brainId: null, createdAt: Date.now(),
+    };
+    await finalizeNote(note, s, ['圖片文字辨識完成', 'AI 整理完成']);
+    pendingImage = null;
+    $('imgPreview').classList.add('hidden'); $('imgPreview').src = '';
+    $('imgHint').value = '';
+    const eb = $('expiryBanner');
+    if (note.eventEnd && daysUntil(note.eventEnd) !== null && daysUntil(note.eventEnd) <= 7) {
+      setTimeout(() => toast(`⏰ 這檔活動剩 ${daysUntil(note.eventEnd)} 天到期，已幫你盯著`), 800);
+    }
+  } catch (e) {
+    toast('圖片處理失敗，再試一次');
+  } finally {
+    pipelining = false;
+    $('personaOrb').classList.remove('working');
+    $('modalLoading').classList.add('hidden');
+    $('modalSave').disabled = false;
+  }
+}
+async function addPdfNote(file) {
+  if (pipelining || !file) return;
+  pipelining = true;
+  $('personaOrb').classList.add('working');
+  $('modalLoading').classList.remove('hidden');
+  $('modalPipeline').innerHTML = '';
+  $('modalSave').disabled = true;
+  try {
+    const s1 = pipelineStep('讀取 PDF 文字');
+    const text = await extractPdfText(file, (p) => {
+      $('modalLoadingText').textContent = `讀取 PDF 中 ${p}%…`;
+    });
+    s1.classList.add('done'); s1.textContent = '✓ PDF 文字讀取完成';
+    if (!text || text.replace(/\s/g, '').length < 20) {
+      toast('PDF 抓不到文字（可能是掃描圖），試試用圖片方式');
+      return;
+    }
+    $('modalLoadingText').textContent = 'AI 正在整理活動資訊…';
+    const d = await aiTask('notebook-summarize', {
+      title: file.name.replace(/\.pdf$/i, ''),
+      text: text.slice(0, 4000),
+    }, 60000);
+    const s = extractJSON(d.text);
+    if (!s || !s.summary) throw new Error('bad-json');
+    const note = {
+      id: uid(), type: 'pdf',
+      title: (s.event_name || file.name.replace(/\.pdf$/i, '')).slice(0, 30),
+      brainId: null, createdAt: Date.now(),
+    };
+    await finalizeNote(note, s, ['PDF 文字讀取完成', 'AI 整理完成']);
+    $('pdfName').textContent = '';
+  } catch (e) {
+    toast('PDF 處理失敗，再試一次');
+  } finally {
+    pipelining = false;
+    $('personaOrb').classList.remove('working');
+    $('modalLoading').classList.add('hidden');
+    $('modalSave').disabled = false;
+  }
+}
+
 async function addTextNote(title, body) {
   if (pipelining) return;
   pipelining = true;
+  $('personaOrb').classList.add('working');
+  $('modalLoading').classList.remove('hidden');
+  $('modalPipeline').innerHTML = '';
+  $('modalSave').disabled = true;
   try {
+    $('modalLoadingText').textContent = 'AI 正在整理…';
+    let s = null;
+    try {
+      const d = await aiTask('notebook-summarize', { title: title || body.slice(0, 24), text: body.slice(0, 4000) }, 60000);
+      s = extractJSON(d.text);
+    } catch { s = null; }
     const note = {
       id: uid(), type: 'text',
       title: title || body.slice(0, 24) || '未命名',
       body, summary: '', keyPoints: [],
       tags: autoTags(body + title), brainId: null, createdAt: Date.now(),
     };
-    notes.unshift(note); save(LS_NOTES, notes);
-    freshIds.add(note.id);
-    await routeNote(note);
-    if (note.brainId) await evolveBrain(note.brainId, note);
-    maybeAbsorbHost();
-    absorbBurst();
-    closeModal(true); renderAll();
+    if (s && s.summary) {
+      await finalizeNote(note, s, ['AI 整理完成']);
+    } else {
+      // AI 失敗：保留純文字，不遺失
+      notes.unshift(note); save(LS_NOTES, notes);
+      freshIds.add(note.id);
+      await routeNote(note);
+      if (note.brainId) await evolveBrain(note.brainId, note);
+      maybeAbsorbHost();
+      absorbBurst();
+      closeModal(true); renderAll();
+    }
     $('textTitle').value = ''; $('textBody').value = '';
-  } finally { pipelining = false; }
+  } finally {
+    pipelining = false;
+    $('personaOrb').classList.remove('working');
+    $('modalLoading').classList.add('hidden');
+    $('modalSave').disabled = false;
+  }
 }
 
 function autoTags(text) {
@@ -629,6 +944,12 @@ function filteredNotes() {
   return notes
     .filter((n) => selectedBrain === 'all' ? true : selectedBrain === 'inbox' ? !n.brainId : n.brainId === selectedBrain)
     .filter((n) => {
+      if (selectedPhase === 'all') return true;
+      const p = phaseOf(n);
+      if (selectedPhase === 'active') return p === 'active' || p === 'nodate';
+      return p === selectedPhase;
+    })
+    .filter((n) => {
       if (!kw) return true;
       const hay = [n.title, n.summary, n.url, (n.keyPoints || []).join(' '), (n.tags || []).join(' '), n.body]
         .join(' ').toLowerCase();
@@ -652,6 +973,18 @@ function noteCard(n, idx) {
   const b = n.brainId && brainById(n.brainId);
   const brainHtml = b ? `<div class="note-brain">${esc(b.emoji)} ${esc(b.name)}</div>` : '';
   const bodyHtml = n.body ? `<p class="note-summary">${esc(n.body.slice(0, 200))}${n.body.length > 200 ? '…' : ''}</p>` : '';
+  const thumbHtml = n.image ? `<img class="note-thumb" src="${n.image}" alt="DM圖片" loading="lazy">` : '';
+
+  // 檔期資訊：倒數徽章＋日期區間＋品牌
+  let eventHtml = '';
+  const chip = countdownChip(n);
+  if (chip || n.eventStart || n.eventEnd) {
+    const range = (n.eventStart || n.eventEnd)
+      ? `<span class="event-dates">📅 <b>${fmtDay(n.eventStart) || '?'}</b> – <b>${fmtDay(n.eventEnd) || '?'}</b>${n.brand ? ` · ${esc(n.brand)}` : ''}</span>` : '';
+    eventHtml = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${chip}${range}</div>`;
+  }
+  const typeLabel = n.type === 'link' ? '🔗 連結' : n.type === 'synth' ? '🤖 腦的思考'
+    : n.type === 'image' ? '📷 圖片' : n.type === 'pdf' ? '📄 PDF' : '✏️ 文字';
 
   // 抓不到內容：溫柔的求救卡片
   let helpHtml = '';
@@ -663,15 +996,21 @@ function noteCard(n, idx) {
         <button class="btn-mini" data-act="supplement">✏️ 幫我補充</button>
         <button class="btn-mini ghost" data-act="retry">↻ 重抓</button>
       </div>`;
+  } else if (n.eventEnd) {
+    actionsHtml = `<div class="note-actions has-actions">
+        <button class="btn-ics" data-act="ics">📅 加入行事曆</button>
+      </div>`;
   }
   const delay = Math.min((idx || 0) * 60, 600);
   return `<article class="note-card ${n.type === 'synth' ? 'synth' : ''} ${failed ? 'needs-help' : ''}" data-id="${n.id}" style="animation-delay:${delay}ms">
     <button class="note-del" data-act="del" title="刪除">×</button>
     <div class="note-top">
-      <span class="note-type">${n.type === 'link' ? '🔗 連結' : n.type === 'synth' ? '🤖 腦的思考' : '✏️ 文字'}</span>
+      <span class="note-type">${typeLabel}</span>
       <span class="note-date">${fmtDate(n.createdAt)}</span>
     </div>
     ${titleHtml}
+    ${eventHtml}
+    ${thumbHtml}
     ${n.summary ? `<p class="note-summary">${esc(n.summary)}</p>` : ''}
     ${bodyHtml}
     ${helpHtml}
@@ -812,6 +1151,7 @@ async function askChat() {
   try {
     const ctxPayload = ctx.map((n) => ({
       title: n.title, summary: n.summary || n.body || '', key_points: n.keyPoints, tags: n.tags,
+      event_name: n.eventName || null, event_start: n.eventStart || null, event_end: n.eventEnd || null,
     }));
     const marketData = await getMarketData(q);
     const d = await aiTask('notebook-chat', {
@@ -883,19 +1223,26 @@ async function saveNote() {
     if (!url) { $('linkUrl').focus(); return; }
     if (!/^https?:\/\//i.test(url)) { toast('請貼上完整的網址（http 開頭）'); return; }
     await addLinkNote(url);
-  } else {
+  } else if (modalTab === 'text') {
     const title = $('textTitle').value.trim();
     const body = $('textBody').value.trim();
     if (!body && !title) { $('textBody').focus(); return; }
     await addTextNote(title, body);
+  } else if (modalTab === 'image') {
+    if (!pendingImage) { toast('請先選擇或貼上圖片'); return; }
+    await addImageNote();
+  } else if (modalTab === 'pdf') {
+    const f = $('pdfFile').files[0] || pendingPdf;
+    if (!f) { toast('請先選擇 PDF'); return; }
+    await addPdfNote(f);
   }
 }
 
 /* ---------------- 事件 ---------------- */
-function renderAll(growing) { renderPersona(growing); renderBrains(); renderBrainDetail(); renderNotes(); }
+function renderAll(growing) { renderPersona(growing); renderPhases(); renderBrains(); renderBrainDetail(); renderExpiryBanner(); renderNotes(); }
 function bind() {
   $('addBtn').onclick = openModal;
-  $('emptyAddBtn').onclick = openModal;
+  $('emptyAddBtn').onclick = () => { setModalTab('image'); openModal(); };
   $('modalCancel').onclick = closeModal;
   $('modalBackdrop').addEventListener('click', (e) => { if (e.target === $('modalBackdrop')) closeModal(); });
   $('modalSave').onclick = saveNote;
@@ -905,6 +1252,46 @@ function bind() {
   $('suppCancel').onclick = closeSupplement;
   $('suppSave').onclick = saveSupplement;
   $('suppBackdrop').addEventListener('click', (e) => { if (e.target === $('suppBackdrop')) closeSupplement(); });
+
+  /* 圖片 / PDF：點選＋拖曳＋貼上 */
+  function bindDrop(zoneId, inputId, handler) {
+    const zone = $(zoneId), input = $(inputId);
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+    input.addEventListener('change', () => { if (input.files[0]) handler(input.files[0]); input.value = ''; });
+    ['dragover', 'dragenter'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('dragover'); }));
+    ['dragleave', 'drop'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('dragover'); }));
+    zone.addEventListener('drop', (e) => {
+      const f = e.dataTransfer && e.dataTransfer.files[0];
+      if (f) handler(f);
+    });
+  }
+  bindDrop('imgDrop', 'imgFile', handleImageFile);
+  bindDrop('pdfDrop', 'pdfFile', (f) => {
+    if (!/pdf$/i.test(f.type) && !/\.pdf$/i.test(f.name)) { toast('請選擇 PDF 檔'); return; }
+    pendingPdf = f;
+    $('pdfName').textContent = `已選：${f.name}`;
+    toast('PDF 就緒，按「丟進筆記本」開始整理');
+  });
+  // Ctrl+V 貼圖片（圖片分頁開啟時）
+  document.addEventListener('paste', (e) => {
+    if (modalTab !== 'image' || $('modalBackdrop').classList.contains('hidden')) return;
+    const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+    if (item) { const f = item.getAsFile(); if (f) handleImageFile(f); }
+  });
+
+  /* 檔期篩選 */
+  $('phaseList').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-phase]');
+    if (!row) return;
+    selectedPhase = selectedPhase === row.dataset.phase ? 'all' : row.dataset.phase;
+    renderPhases(); renderExpiryBanner(); renderNotes();
+  });
+  /* 到期橫幅 → 跳到該筆記 */
+  $('expiryBanner').addEventListener('click', (e) => {
+    const b = e.target.closest('.eb-go');
+    if (b) jumpToNote(b.dataset.id);
+  });
 
   $('searchInput').addEventListener('input', (e) => { searchKw = e.target.value; renderNotes(); });
   $('brainList').addEventListener('click', (e) => {
@@ -944,6 +1331,9 @@ function bind() {
       retryIngest(id);
     } else if (act.dataset.act === 'supplement') {
       openSupplement(id);
+    } else if (act.dataset.act === 'ics') {
+      const n = notes.find((x) => x.id === id);
+      if (n) downloadICS(n);
     }
   });
 

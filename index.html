@@ -33,6 +33,11 @@
       </div>
       <p class="persona-mini-greeting" id="personaGreeting">嗨，我還沒有名字。丟一些你看到的影片或文章給我，我會自動分類、長出大腦。</p>
 
+      <div class="phase-filter">
+        <div class="phase-head"><span>⏰ 檔期</span></div>
+        <div id="phaseList"></div>
+      </div>
+
       <div class="brains-head">
         <span>🧠 大腦們</span>
         <span class="brains-count" id="brainsCount"></span>
@@ -56,6 +61,7 @@
 
     <!-- 右：腦內世界 -->
     <section class="notes-col">
+      <div class="expiry-banner hidden" id="expiryBanner"></div>
       <div class="brain-detail hidden" id="brainDetail"></div>
       <div class="notes-grid" id="notesGrid"></div>
       <div class="empty-state" id="emptyState">
@@ -80,8 +86,8 @@
           </svg>
         </div>
         <h2 class="sleeping">我還在沉睡…</h2>
-        <p>餵我吃點東西吧——丟進影片或文章，<br>我會自動分類、摘要重點，長出專屬大腦。</p>
-        <button class="btn-primary" id="emptyAddBtn">餵第一口進來</button>
+        <p>拖入一張賣場 DM 或活動截圖，<br>我會自動抓出活動名稱、日期與優惠規則，<br>到期前還會提醒你。</p>
+        <button class="btn-primary" id="emptyAddBtn">丟第一張 DM 進來</button>
       </div>
     </section>
   </main>
@@ -102,8 +108,10 @@
   <div class="modal-backdrop hidden" id="modalBackdrop">
     <div class="modal">
       <div class="modal-tabs">
-        <button class="modal-tab active" data-tab="link">🔗 貼連結</button>
-        <button class="modal-tab" data-tab="text">✏️ 寫文字</button>
+        <button class="modal-tab active" data-tab="link">🔗 連結</button>
+        <button class="modal-tab" data-tab="text">✏️ 文字</button>
+        <button class="modal-tab" data-tab="image">📷 圖片</button>
+        <button class="modal-tab" data-tab="pdf">📄 PDF</button>
       </div>
       <div class="modal-pane" id="paneLink">
         <div class="feed-pod-head">🍼 投餵艙</div>
@@ -113,6 +121,24 @@
       <div class="modal-pane hidden" id="paneText">
         <input id="textTitle" type="text" placeholder="標題（可不填）" autocomplete="off">
         <textarea id="textBody" rows="5" placeholder="把想記的東西寫下來…"></textarea>
+      </div>
+      <div class="modal-pane hidden" id="paneImage">
+        <div class="dropzone" id="imgDrop" role="button" tabindex="0" aria-label="選擇圖片">
+          <div class="dropzone-icon">📷</div>
+          <div class="dropzone-text">點此選擇 / 拖入 DM 照片<br><span>或直接 Ctrl+V 貼上截圖</span></div>
+        </div>
+        <input type="file" id="imgFile" accept="image/*" class="hidden">
+        <img id="imgPreview" class="img-preview hidden" alt="待辨識圖片預覽">
+        <input id="imgHint" type="text" placeholder="補充說明（選填，例如：這是萬家福DM）" autocomplete="off">
+        <p class="modal-note">AI 會讀出圖片上的活動名稱、日期與優惠規則。</p>
+      </div>
+      <div class="modal-pane hidden" id="panePdf">
+        <div class="dropzone" id="pdfDrop" role="button" tabindex="0" aria-label="選擇PDF">
+          <div class="dropzone-icon">📄</div>
+          <div class="dropzone-text">點此選擇 / 拖入 PDF 型錄<br><span>自動抽出文字整理成重點</span></div>
+        </div>
+        <input type="file" id="pdfFile" accept="application/pdf" class="hidden">
+        <p class="modal-note" id="pdfName"></p>
       </div>
       <div class="modal-actions">
         <button class="btn-ghost" id="modalCancel">取消</button>
