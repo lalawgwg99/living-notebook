@@ -674,8 +674,8 @@ body::after {
 .modal-tab { letter-spacing: 1px; font-weight: 600; }
 .modal-tab.active { letter-spacing: 1px; }
 
-/* 平板／手機：聊天恢復為浮動面板 */
-@media (max-width: 1100px) {
+/* 平板：聊天恢復為浮動面板（只在 861–1100px 之間，不干擾手機單欄） */
+@media (max-width: 1100px) and (min-width: 861px) {
   .layout { grid-template-columns: 248px minmax(0, 1fr); max-width: 1180px; }
   .chat-col {
     position: fixed; right: 16px; bottom: 86px; z-index: 30;
@@ -693,4 +693,14 @@ body::after {
   font-size: 11px; font-weight: 600; letter-spacing: 1px;
   color: var(--ink-soft); border: 1px solid var(--line);
   padding: 2px 8px; border-radius: 20px; background: rgba(255,255,255,.5);
+}
+
+/* v4.2：手機版單欄＋檔期橫向精簡 */
+@media (max-width: 860px) {
+  .phase-filter #phaseList { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+  .phase-row { flex-shrink: 0; width: auto; padding: 8px 12px; }
+  .phase-row-count { display: none; }
+  .phase-row.active .phase-row-count { display: inline; }
+  .persona-mini-greeting { font-size: 13px; }
+  .brains-head { margin-top: 14px; }
 }
