@@ -51,6 +51,14 @@ function toast(msg, ms) {
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, ms || 3200);
 }
 
+/* 餵食吸收特效：同心光圈＋😋 */
+function absorbBurst() {
+  const fx = $('absorbFx');
+  if (!fx) return;
+  fx.classList.remove('on'); void fx.offsetWidth; fx.classList.add('on');
+  setTimeout(() => fx.classList.remove('on'), 1000);
+}
+
 /* ---------------- 資料 ---------------- */
 let notes = load(LS_NOTES, []);
 let brains = load(LS_BRAINS, []);
@@ -66,6 +74,9 @@ let selectedBrain = 'all';   // 'all' | 'inbox' | brainId
 let searchKw = '';
 let pipelining = false;
 let chatting = false;
+let brainView = 'list';          // 'list' | 'sky'
+const freshIds = new Set();      // 剛誕生的筆記：重點螢光筆掃一次
+let skyRAF = null;
 
 const activeBrains = () => brains.filter((b) => !b.retired);
 const brainById = (id) => brains.find((b) => b.id === id);
@@ -149,6 +160,121 @@ function renderBrains() {
   });
   list.innerHTML = html;
   $('brainsCount').textContent = activeBrains().length ? `${activeBrains().length} 個大腦` : '還沒長出來';
+  // 星系視圖開著時，大腦有變動就重畫星空
+  if (brainView === 'sky' && !$('constellationWrap').classList.contains('hidden')) startConstellation();
+}
+
+/* ---------------- 大腦星系（神經突觸視圖） ---------------- */
+function setBrainView(v) {
+  brainView = v;
+  $('viewListBtn').classList.toggle('active', v === 'list');
+  $('viewSkyBtn').classList.toggle('active', v === 'sky');
+  $('brainList').classList.toggle('hidden', v !== 'list');
+  $('constellationWrap').classList.toggle('hidden', v !== 'sky');
+  if (v === 'sky') startConstellation(); else stopConstellation();
+}
+function stopConstellation() {
+  if (skyRAF) { cancelAnimationFrame(skyRAF); skyRAF = null; }
+}
+function startConstellation() {
+  stopConstellation();
+  const cv = $('brainCanvas');
+  const wrap = $('constellationWrap');
+  if (!cv || !wrap || wrap.classList.contains('hidden')) return;
+  const W = Math.max(200, wrap.clientWidth || 260), H = 280;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const stars = Array.from({ length: 70 }, () => ({
+    x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.3 + 0.3, tw: Math.random() * 6.28,
+  }));
+  const list = activeBrains().slice(0, 12);
+  if (!list.length) {
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('還沒有大腦，丟東西進來就會長出來', W / 2, H / 2);
+    return;
+  }
+  const cx = W / 2, cy = H / 2 - 8, R = Math.min(W, H) / 2 - 36;
+  const nodes = list.map((b, i) => {
+    const a = (i / list.length) * Math.PI * 2 - Math.PI / 2;
+    return {
+      b, x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R * 0.8,
+      r: 15 + Math.min(10, brainNotes(b.id).length * 1.4), parts: [],
+    };
+  });
+  nodes.forEach((nd) => {
+    const cnt = Math.min(7, brainNotes(nd.b.id).length);
+    for (let i = 0; i < cnt; i++) {
+      nd.parts.push({ a: Math.random() * 6.28, d: nd.r + 9 + Math.random() * 15,
+        s: 0.006 + Math.random() * 0.012, sz: 1.2 + Math.random() * 1.8 });
+    }
+  });
+  // 突觸光纖：共享 ≥2 個標籤的大腦連線
+  const links = [];
+  for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+    const ti = new Set(brainTags(nodes[i].b)), tj = new Set(brainTags(nodes[j].b));
+    let shared = 0; ti.forEach((t) => { if (tj.has(t)) shared++; });
+    if (shared >= 2) links.push([i, j]);
+  }
+  const draw = (t) => {
+    ctx.clearRect(0, 0, W, H);
+    stars.forEach((s) => {
+      const a = 0.22 + 0.33 * Math.abs(Math.sin(t * 0.8 + s.tw));
+      ctx.fillStyle = `rgba(255,255,255,${a.toFixed(2)})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.29); ctx.fill();
+    });
+    links.forEach(([i, j]) => {
+      const A = nodes[i], B = nodes[j];
+      const g = ctx.createLinearGradient(A.x, A.y, B.x, B.y);
+      g.addColorStop(0, A.b.color || '#8a7fd6'); g.addColorStop(1, B.b.color || '#8a7fd6');
+      ctx.strokeStyle = g; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+      ctx.globalAlpha = 1;
+    });
+    nodes.forEach((nd) => {
+      nd.parts.forEach((p) => {
+        if (!reduced) p.a += p.s;
+        const px = nd.x + Math.cos(p.a) * p.d, py = nd.y + Math.sin(p.a) * p.d;
+        ctx.fillStyle = nd.b.color || '#8a7fd6'; ctx.globalAlpha = 0.8;
+        ctx.beginPath(); ctx.arc(px, py, p.sz, 0, 6.29); ctx.fill(); ctx.globalAlpha = 1;
+      });
+      const col = nd.b.color || '#8a7fd6';
+      const glow = ctx.createRadialGradient(nd.x, nd.y, 2, nd.x, nd.y, nd.r + 13);
+      glow.addColorStop(0, col + 'cc'); glow.addColorStop(1, col + '00');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r + 13, 0, 6.29); ctx.fill();
+      ctx.fillStyle = '#221f28';
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r, 0, 6.29); ctx.fill();
+      ctx.strokeStyle = selectedBrain === nd.b.id ? '#ffffff' : col;
+      ctx.lineWidth = selectedBrain === nd.b.id ? 3 : 2;
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r, 0, 6.29); ctx.stroke();
+      ctx.font = `${Math.round(nd.r * 1.05)}px serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(nd.b.emoji || '🧠', nd.x, nd.y + 1);
+      ctx.font = '11px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.fillText(String(nd.b.name).slice(0, 8), nd.x, nd.y + nd.r + 11);
+    });
+  };
+  cv.onclick = (e) => {
+    const rect = cv.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    let best = null, bd = 1e9;
+    nodes.forEach((nd) => {
+      const d = Math.hypot(nd.x - x, nd.y - y);
+      if (d < nd.r + 16 && d < bd) { bd = d; best = nd; }
+    });
+    if (best) {
+      selectedBrain = best.b.id;
+      renderBrains(); renderBrainDetail(); renderNotes();
+      toast(`進入「${best.b.name}」的世界 ✨`);
+    }
+  };
+  if (reduced) { draw(0); return; }
+  const frame = () => { draw(performance.now() / 1000); skyRAF = requestAnimationFrame(frame); };
+  frame();
 }
 
 /* ---------------- 腦內詳情 ---------------- */
@@ -281,9 +407,11 @@ async function saveSupplement() {
     n.tags = Array.isArray(s.tags) ? s.tags.filter((x) => typeof x === 'string').map((x) => x.slice(0, 12)).slice(0, 5) : [];
     n.needsHelp = false;
     save(LS_NOTES, notes);
+    freshIds.add(n.id);
     await routeNote(n, true);
     if (n.brainId) await evolveBrain(n.brainId, n);
     maybeAbsorbHost();
+    absorbBurst();
     closeSupplement(); renderAll();
     toast('補充完成 ✨ 大腦吃掉了');
   } catch (e) {
@@ -320,6 +448,7 @@ async function addLinkNote(url) {
     };
     if (!data) note.summary = '';
     notes.unshift(note); save(LS_NOTES, notes);
+    freshIds.add(note.id);
     pipelineStep('把內容抓回來', true);
 
     $('modalLoadingText').textContent = 'AI 正在摘要重點…';
@@ -336,6 +465,7 @@ async function addLinkNote(url) {
     s2.classList.add('done'); s2.textContent = '✓ 大腦進化完成';
 
     maybeAbsorbHost();
+    absorbBurst();
     closeModal(true); renderAll();
   } finally {
     pipelining = false;
@@ -357,9 +487,11 @@ async function addTextNote(title, body) {
       tags: autoTags(body + title), brainId: null, createdAt: Date.now(),
     };
     notes.unshift(note); save(LS_NOTES, notes);
+    freshIds.add(note.id);
     await routeNote(note);
     if (note.brainId) await evolveBrain(note.brainId, note);
     maybeAbsorbHost();
+    absorbBurst();
     closeModal(true); renderAll();
     $('textTitle').value = ''; $('textBody').value = '';
   } finally { pipelining = false; }
@@ -507,8 +639,9 @@ function filteredNotes() {
 
 function noteCard(n, idx) {
   const pts = (n.keyPoints || []).slice(0, 5);
+  const fresh = freshIds.has(n.id);
   const ptsHtml = pts.length
-    ? `<ul class="note-points collapsed" id="pts-${n.id}">${pts.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+    ? `<ul class="note-points collapsed" id="pts-${n.id}">${pts.map((p) => `<li class="${fresh ? 'hl-fresh' : ''}">${esc(p)}</li>`).join('')}</ul>
        ${pts.length > 2 ? `<button class="points-toggle" data-toggle="${n.id}">展開全部重點 ▾</button>` : ''}`
     : '';
   const tagsHtml = (n.tags || []).length
@@ -550,6 +683,7 @@ function noteCard(n, idx) {
 function renderNotes() {
   const list = filteredNotes();
   $('notesGrid').innerHTML = list.map((n, i) => noteCard(n, i)).join('');
+  freshIds.clear();   // 螢光筆只掃一次
   const showEmpty = list.length === 0;
   $('emptyState').style.display = showEmpty ? '' : 'none';
   $('notesGrid').style.display = showEmpty ? 'none' : '';
@@ -569,17 +703,33 @@ function retrieve(question, k) {
   const picked = scored.slice(0, k || 5).map((x) => x.n);
   return picked.length ? picked : pool.slice(0, 3);
 }
-function pushChatMsg(role, text) {
-  chatHistory.push({ role, content: text });
+function pushChatMsg(role, text, sources) {
+  chatHistory.push({ role, content: text, sources: sources || null });
   if (chatHistory.length > 40) chatHistory = chatHistory.slice(-40);
   save(LS_CHAT, chatHistory);
   renderChat();
 }
 function renderChat() {
   const body = $('chatBody');
-  body.innerHTML = chatHistory.map((m) =>
-    `<div class="msg ${m.role === 'user' ? 'user' : 'bot'}">${esc(m.content)}</div>`).join('');
+  body.innerHTML = chatHistory.map((m) => {
+    let cite = '';
+    if (m.role !== 'user' && Array.isArray(m.sources) && m.sources.length) {
+      cite = `<div class="cite-cards">${m.sources.slice(0, 4).map((s) =>
+        `<button class="cite-card" data-id="${esc(s.id)}">📎 ${esc(String(s.title || '未命名').slice(0, 18))}</button>`).join('')}</div>`;
+    }
+    return `<div class="msg ${m.role === 'user' ? 'user' : 'bot'}">${esc(m.content)}${cite}</div>`;
+  }).join('');
   body.scrollTop = body.scrollHeight;
+}
+/* 點引用卡片 → 跳到那則筆記所屬的大腦 */
+function jumpToNote(id) {
+  const n = notes.find((x) => x.id === id);
+  if (!n) return;
+  selectedBrain = (n.brainId && brainById(n.brainId)) ? n.brainId : 'all';
+  renderAll();
+  toast('📍 已定位到相關筆記');
+  const card = document.querySelector(`.note-card[data-id="${id}"]`);
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 function openChat() {
   $('chatPanel').classList.remove('hidden');
@@ -646,31 +796,41 @@ async function askChat() {
   if (!q || chatting) return;
   chatting = true;
   $('chatSend').disabled = true;
+  $('chatFab').classList.add('thinking');
+  $('personaOrb').classList.add('working');
   input.value = '';
   pushChatMsg('user', q);
-  const typing = document.createElement('div');
-  typing.className = 'msg bot typing'; typing.textContent = '大腦們翻筆記中…';
-  $('chatBody').appendChild(typing);
+  const ctx = retrieve(q, 5);
+  // 儀式感：主人格翻找記憶，相關筆記標題隱隱發光
+  const ritual = document.createElement('div');
+  ritual.className = 'msg bot ritual';
+  ritual.innerHTML = '🧠 主人格正在翻找大腦們的記憶…' +
+    (ctx.length ? `<div class="ritual-titles">${ctx.slice(0, 4).map((n) =>
+      `<span>✦ ${esc(String(n.title || '未命名').slice(0, 22))}</span>`).join('')}</div>` : '');
+  $('chatBody').appendChild(ritual);
   $('chatBody').scrollTop = $('chatBody').scrollHeight;
   try {
-    const ctx = retrieve(q, 5).map((n) => ({
+    const ctxPayload = ctx.map((n) => ({
       title: n.title, summary: n.summary || n.body || '', key_points: n.keyPoints, tags: n.tags,
     }));
     const marketData = await getMarketData(q);
     const d = await aiTask('notebook-chat', {
       persona: { name: persona.name, mood: persona.mood },
-      context_notes: ctx,
+      context_notes: ctxPayload,
       market_data: marketData,
       messages: chatHistory.slice(-8).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
     }, 45000);
-    typing.remove();
-    pushChatMsg('bot', d.text || '嗯…大腦們翻了一下，暫時沒想法，換個問法試試？');
+    ritual.remove();
+    const sources = ctx.map((n) => ({ id: n.id, title: n.title, brainId: n.brainId }));
+    pushChatMsg('bot', d.text || '嗯…大腦們翻了一下，暫時沒想法，換個問法試試？', sources);
   } catch (e) {
-    typing.remove();
+    ritual.remove();
     pushChatMsg('bot', '大腦們現在有點累（連不上），稍後再問我一次吧。');
   } finally {
     chatting = false;
     $('chatSend').disabled = false;
+    $('chatFab').classList.remove('thinking');
+    $('personaOrb').classList.remove('working');
   }
 }
 
@@ -787,6 +947,9 @@ function bind() {
     }
   });
 
+  $('viewListBtn').onclick = () => setBrainView('list');
+  $('viewSkyBtn').onclick = () => setBrainView('sky');
+
   $('chatFab').onclick = () => {
     if ($('chatPanel').classList.contains('hidden')) openChat();
     else $('chatPanel').classList.add('hidden');
@@ -794,6 +957,10 @@ function bind() {
   $('chatClose').onclick = () => $('chatPanel').classList.add('hidden');
   $('chatSend').onclick = askChat;
   $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') askChat(); });
+  $('chatBody').addEventListener('click', (e) => {
+    const c = e.target.closest('.cite-card');
+    if (c) jumpToNote(c.dataset.id);
+  });
 
   $('exportBtn').onclick = exportData;
   $('importBtn').onclick = () => $('importFile').click();

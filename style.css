@@ -401,3 +401,134 @@ body {
 
 .auto-hint { font-size: 12px; color: var(--ink-faint); margin: 0; padding: 0 2px; text-align: center; }
 .supp-title { font-family: "Noto Serif TC", serif; font-size: 19px; margin: 0 0 6px; }
+
+/* ================= v2 生命化：Living & Organic ================= */
+
+/* 紙紋：全站細微纖維雜訊 */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 2000; pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+/* ---- 沉睡大腦空狀態 ---- */
+.sleep-brain { display: flex; justify-content: center; margin-bottom: 6px; }
+.sleep-brain svg {
+  width: 128px; height: 128px;
+  animation: sleepFloat 6.5s ease-in-out infinite;
+  filter: drop-shadow(0 10px 24px rgba(138, 127, 214, 0.38));
+}
+@keyframes sleepFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-11px) scale(1.03); }
+}
+.sleep-brain .zb { opacity: 0; animation: zFloat 3.4s ease-in-out infinite; }
+.sleep-brain .zb.z2 { animation-delay: 1.1s; }
+.sleep-brain .zb.z3 { animation-delay: 2.2s; }
+@keyframes zFloat {
+  0% { opacity: 0; transform: translate(0, 6px); }
+  35% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(10px, -10px); }
+}
+.empty-state h2.sleeping { color: var(--ink-soft); font-weight: 600; }
+
+/* ---- 投餵艙 ---- */
+.feed-pod-head { font-size: 14px; font-weight: 700; margin-bottom: 10px; letter-spacing: 1px; }
+#linkUrl.feed-pod {
+  border: 2px solid transparent;
+  background: linear-gradient(#fff, #fff) padding-box,
+              linear-gradient(135deg, var(--mood), #8a7fd6) border-box;
+  animation: podGlow 3.2s ease-in-out infinite;
+}
+@keyframes podGlow {
+  0%, 100% { box-shadow: 0 0 0 4px var(--mood-soft), 0 0 16px rgba(194, 112, 61, 0.22); }
+  50% { box-shadow: 0 0 0 7px var(--mood-soft), 0 0 30px rgba(194, 112, 61, 0.4); }
+}
+
+/* ---- 餵食吸收特效 ---- */
+#absorbFx { position: fixed; inset: 0; z-index: 150; pointer-events: none; display: none; }
+#absorbFx.on { display: block; }
+#absorbFx .ring {
+  position: absolute; left: 50%; top: 42%; width: 110px; height: 110px; margin: -55px;
+  border: 3px solid var(--mood); border-radius: 50%; opacity: 0;
+}
+#absorbFx.on .ring { animation: absorbRing 0.9s ease-out; }
+#absorbFx.on .ring.r2 { animation-delay: 0.14s; border-color: #8a7fd6; }
+#absorbFx.on .ring.r3 { animation-delay: 0.28s; }
+@keyframes absorbRing {
+  0% { transform: scale(0.25); opacity: 0.95; }
+  100% { transform: scale(4.2); opacity: 0; }
+}
+#absorbFx .gulp {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+  font-size: 40px; opacity: 0;
+}
+#absorbFx.on .gulp { animation: gulpIn 0.9s ease-out; }
+@keyframes gulpIn {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.6); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -62%) scale(1); }
+}
+
+/* ---- 螢光筆掃過 ---- */
+@keyframes hlSweep {
+  0% { background-size: 0% 80%; background-image: linear-gradient(90deg, rgba(255, 224, 102, 0.85), rgba(255, 224, 102, 0.85)); }
+  55% { background-size: 102% 80%; background-image: linear-gradient(90deg, rgba(255, 224, 102, 0.85), rgba(255, 224, 102, 0.85)); }
+  100% { background-size: 102% 80%; background-image: linear-gradient(90deg, rgba(255, 224, 102, 0.3), rgba(255, 224, 102, 0.3)); }
+}
+.note-points li.hl-fresh {
+  background-repeat: no-repeat; background-position: 18px 62%;
+  animation: hlSweep 1.5s ease 0.25s forwards;
+}
+
+/* ---- 星系視圖 ---- */
+.brains-view-toggle { display: flex; gap: 4px; }
+.view-btn {
+  border: 1px solid var(--paper-deep); background: var(--card); border-radius: 999px;
+  padding: 3px 11px; font-size: 12px; cursor: pointer; color: var(--ink-soft); font-family: inherit;
+}
+.view-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.constellation-wrap { display: flex; flex-direction: column; gap: 6px; }
+#brainCanvas {
+  width: 100%; height: 280px; border-radius: 14px; display: block; cursor: pointer;
+  background: radial-gradient(ellipse at 50% 42%, #2f2b36 0%, #232028 62%, #1b191f 100%);
+  box-shadow: var(--shadow);
+}
+.constellation-hint { font-size: 11.5px; color: var(--ink-faint); text-align: center; margin: 0; }
+
+/* ---- 聊天儀式感 ---- */
+.chat-fab.thinking { animation: fabPulse 1.4s ease-in-out infinite; }
+@keyframes fabPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 6px 22px rgba(194, 112, 61, 0.45); }
+  50% { transform: scale(1.09); box-shadow: 0 6px 36px rgba(194, 112, 61, 0.75); }
+}
+.msg.ritual {
+  background: transparent; border: 1.5px dashed var(--mood-line);
+  color: var(--ink-soft); font-size: 13px;
+}
+.ritual-titles { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; }
+.ritual-titles span { font-size: 12.5px; animation: ritualShimmer 1.3s ease-in-out infinite; }
+.ritual-titles span:nth-child(2) { animation-delay: 0.22s; }
+.ritual-titles span:nth-child(3) { animation-delay: 0.44s; }
+.ritual-titles span:nth-child(4) { animation-delay: 0.66s; }
+@keyframes ritualShimmer { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+.cite-cards { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+.cite-card {
+  font-size: 12px; background: var(--mood-soft); color: var(--ink);
+  border: 1px solid var(--mood-line); border-radius: 8px; padding: 5px 10px; cursor: pointer;
+  animation: citeIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  font-family: inherit; text-align: left;
+}
+.cite-card:hover { background: var(--mood-line); }
+.cite-card:nth-child(2) { animation-delay: 0.08s; }
+.cite-card:nth-child(3) { animation-delay: 0.16s; }
+.cite-card:nth-child(4) { animation-delay: 0.24s; }
+@keyframes citeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ---- 減少動態偏好 ---- */
+@media (prefers-reduced-motion: reduce) {
+  .persona-mini-orb { animation: none; }
+  .sleep-brain svg, .sleep-brain .zb, #linkUrl.feed-pod, .chat-fab.thinking { animation: none !important; }
+  .note-points li.hl-fresh { animation: none; background: rgba(255, 224, 102, 0.3); background-size: 102% 80%; background-repeat: no-repeat; background-position: 18px 62%; }
+  * { transition-duration: 0.01ms !important; }
+}
