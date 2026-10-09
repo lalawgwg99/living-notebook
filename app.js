@@ -588,6 +588,58 @@ function openChat() {
   } else renderChat();
   setTimeout(() => $('chatInput').focus(), 50);
 }
+/* ---------------- 台股即時報價（瀏覽器直連證交所，有開 CORS） ---------------- */
+const TW_STOCK_NAMES = {
+'0050': '元大台灣50', '00631L': '元大台灣50正2', '00646': '元大S&P500',
+'00935': '野村臺灣新科技50', '2330': '台積電', '2454': '聯發科',
+'2317': '鴻海', '2308': '台達電', '2382': '廣達', '2303': '聯電',
+'2881': '富邦金', '2882': '國泰金', '2603': '長榮',
+};
+const TW_NAME_TO_CODE = {};
+Object.entries(TW_STOCK_NAMES).forEach(([code, name]) => {
+  TW_NAME_TO_CODE[name] = code;
+  TW_NAME_TO_CODE[name.replace('臺', '台')] = code;
+});
+function stockIntent(text) {
+  return /股價|收盤|報價|漲|跌|多少|持股|成分|淨值/.test(String(text || ''));
+}
+function detectTwCodes(text) {
+  const t = String(text || '');
+  const found = [];
+  Object.entries(TW_NAME_TO_CODE).forEach(([name, code]) => {
+    if (t.includes(name) && !found.includes(code)) found.push(code);
+  });
+  (t.match(/\b\d{4}[A-Z]?\b/g) || []).forEach((c) => {
+    const code = c.toUpperCase();
+    if (TW_STOCK_NAMES[code] && !found.includes(code)) found.push(code);
+  });
+  return found.slice(0, 3);
+}
+async function fetchTwseQuote(code) {
+  try {
+    const now = new Date();
+    const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const r = await fetch(`https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${ymd}&stockNo=${code}`);
+    const d = await r.json();
+    if (!d || d.stat !== 'OK' || !Array.isArray(d.data) || d.data.length < 2) return null;
+    const rows = d.data.slice(-2);
+    const num = (s) => parseFloat(String(s).replace(/,/g, ''));
+    const price = num(rows[1][6]);
+    const prevClose = num(rows[0][6]);
+    if (!Number.isFinite(price) || !Number.isFinite(prevClose) || prevClose <= 0) return null;
+    const m = String(rows[1][0]).match(/(\d+)\/(\d+)\/(\d+)/);
+    const chg = (price - prevClose) / prevClose * 100;
+    return `${TW_STOCK_NAMES[code] || code}(${code}) ${m ? `${m[2]}/${m[3]}` : ''}收 ${price.toFixed(2)}，${chg >= 0 ? '漲' : '跌'}${Math.abs(chg).toFixed(2)}%`;
+  } catch { return null; }
+}
+async function getMarketData(question) {
+  if (!stockIntent(question)) return '';
+  const recent = chatHistory.filter((m) => m.role === 'user').slice(-3).map((m) => m.content).join('\n');
+  const codes = detectTwCodes(recent);
+  if (!codes.length) return '';
+  const lines = (await Promise.all(codes.map(fetchTwseQuote))).filter(Boolean);
+  return lines.join('\n');
+}
 async function askChat() {
   const input = $('chatInput');
   const q = input.value.trim();
@@ -604,9 +656,11 @@ async function askChat() {
     const ctx = retrieve(q, 5).map((n) => ({
       title: n.title, summary: n.summary || n.body || '', key_points: n.keyPoints, tags: n.tags,
     }));
+    const marketData = await getMarketData(q);
     const d = await aiTask('notebook-chat', {
       persona: { name: persona.name, mood: persona.mood },
       context_notes: ctx,
+      market_data: marketData,
       messages: chatHistory.slice(-8).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
     }, 45000);
     typing.remove();
