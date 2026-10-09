@@ -3,21 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>活筆記 — 檔期管理</title>
+<title>期印 — 檔期管理</title>
 <meta name="description" content="DM、型錄、活動訊息丟進來，自動整理成檔期，標出截止日並提醒。">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20261009h">
 <script src="config.js"></script>
 </head>
 <body>
 <div id="app">
   <header class="topbar">
-    <div class="brand"><span class="brand-dot" id="activityDot" aria-hidden="true"></span><span class="brand-name">活筆記</span></div>
+    <div class="brand"><span class="seal" id="activityDot" aria-hidden="true">印</span><span class="brand-name">期印<small>檔期管理</small></span></div>
     <input id="searchInput" class="search" type="search" placeholder="搜尋活動、品牌…" autocomplete="off">
     <div class="topbar-actions">
       <button id="assistantBtn" class="icon-btn" aria-label="AI 助手">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
       </button>
-      <button id="addBtn" class="btn-primary">＋ 新增</button>
+      <button id="addBtn" class="btn-outline">＋ 新增</button>
     </div>
   </header>
 
@@ -58,6 +59,7 @@
 
   <div class="modal-backdrop hidden" id="modalBackdrop">
     <div class="modal">
+      <div class="modal-title">新增活動</div>
       <div class="modal-tabs">
         <button class="modal-tab active" data-tab="link">連結</button>
         <button class="modal-tab" data-tab="text">文字</button>
@@ -118,11 +120,11 @@
   </div>
 
   <footer class="foot">
-    <span>活筆記 · 檔期管理</span>
+    <span>期印 · 檔期管理</span>
     <span class="foot-links"><button id="exportBtn" class="link-btn">匯出</button> · <button id="importBtn" class="link-btn">匯入</button></span>
     <input type="file" id="importFile" accept="application/json" class="hidden">
   </footer>
 </div>
-<script src="app.js?v=20261009g"></script>
+<script src="app.js?v=20261009h"></script>
 </body>
 </html>

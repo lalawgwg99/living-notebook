@@ -1,4 +1,4 @@
-/* 活筆記 — 多腦架構前端
+/* 期印 — 檔期管理前端
  * 丟進來 → 抓內容 → AI摘要 → 自動分類進大腦 → 大腦進化（分裂/繁衍/思考/補缺口）
  * 資料全存在瀏覽器 localStorage；AI 走 ai-proxy ＋ notebook-ingest。
  */
@@ -88,11 +88,28 @@ function phaseOf(n) {
 function countdownChip(n) {
   const d = daysUntil(n.eventEnd);
   if (d === null) return '';
-  if (d < 0) return `<span class="countdown ended">已結束</span>`;
-  if (d === 0) return `<span class="countdown urgent">今天到期</span>`;
-  if (d <= 3) return `<span class="countdown urgent">剩 ${d} 天</span>`;
-  if (d <= 7) return `<span class="countdown soon">剩 ${d} 天</span>`;
-  return `<span class="countdown active">剩 ${d} 天</span>`;
+  if (d < 0) return `<div class="stamp done"><div class="num">已結束</div></div>`;
+  if (d === 0) return `<div class="stamp urgent"><div class="num">今</div><div class="unit">天到期</div></div>`;
+  if (d <= 3) return `<div class="stamp urgent"><div class="num">${d}</div><div class="unit">天後到期</div></div>`;
+  return `<div class="stamp"><div class="num">${d}</div><div class="unit">天後到期</div></div>`;
+}
+function fmtDot(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  return m ? `${m[2]}.${m[3]}` : '';
+}
+/* 檔期時間軸：開始 → 今日位置 → 截止 */
+function timelineHtml(n) {
+  const e = parseDay(n.eventEnd);
+  if (!e) return '';
+  const s = parseDay(n.eventStart);
+  const now = todayMid().getTime();
+  let pct = 0;
+  if (s && e > s) pct = Math.min(100, Math.max(0, Math.round((now - s.getTime()) / (e.getTime() - s.getTime()) * 100)));
+  const d = daysUntil(n.eventEnd);
+  const cls = d !== null && d < 0 ? 'done' : (d !== null && d <= 3 ? 'urgent' : '');
+  const startLbl = s ? `${fmtDot(n.eventStart)} 開始` : '—';
+  return `<div class="timeline ${cls}"><i style="width:${pct}%"></i></div>
+    <div class="tlabels"><span>${startLbl}</span><span>${fmtDot(n.eventEnd)} 截止</span></div>`;
 }
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -129,7 +146,7 @@ function downloadICS(n) {
   const escICS = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n').slice(0, 200);
   const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   const ics = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//活筆記//檔期管家//TW',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//期印//檔期管理//TW',
     'BEGIN:VEVENT',
     `UID:${n.id}@living-notebook`,
     `DTSTAMP:${stamp}`,
@@ -242,11 +259,9 @@ function renderPhases() {
     if (p === 'nodate') counts.active++;
     else if (counts[p] !== undefined) counts[p]++;
   });
-  const items = [{ id: 'all', name: '全部', color: '#a79c8b' }, ...PHASES];
+  const items = [{ id: 'all', name: '全部' }, ...PHASES];
   el.innerHTML = items.map((p) =>
-    `<button class="phase-chip ${selectedPhase === p.id ? 'active' : ''}" data-phase="${p.id}">
-      <span class="dot" style="background:${p.color}"></span>${p.name}<span class="n">${counts[p.id]}</span>
-    </button>`).join('');
+    `<button class="phase-chip ${selectedPhase === p.id ? 'active' : ''}" data-phase="${p.id}">${p.name}<span class="n">${counts[p.id]}</span></button>`).join('');
 }
 /* 到期橫幅：7 天內到期的活動 */
 function renderExpiryBanner() {
@@ -258,7 +273,7 @@ function renderExpiryBanner() {
     .slice(0, 5);
   if (!list.length || selectedPhase !== 'all') { el.classList.add('hidden'); el.innerHTML = ''; return; }
   el.classList.remove('hidden');
-  el.innerHTML = `<b>${list.length} 則活動即將到期</b>
+  el.innerHTML = `<div class="banner-main"><span class="hanko">急</span><span>${list.length} 則活動即將到期</span></div>
     <ul>${list.map((n) => {
       const d = daysUntil(n.eventEnd);
       const label = d === 0 ? '今天到期' : `剩 ${d} 天`;
@@ -995,8 +1010,9 @@ function noteCard(n, idx) {
   const b = n.brainId && brainById(n.brainId);
   const cd = countdownChip(n);
   const dates = (n.eventStart || n.eventEnd)
-    ? `${fmtDay(n.eventStart) || '?'} – ${fmtDay(n.eventEnd) || '?'}${n.brand ? ' · ' + esc(n.brand) : ''}` : '';
+    ? `${n.brand ? '<b>' + esc(n.brand) + '</b> · ' : ''}${fmtDot(n.eventStart) || '?'} — ${fmtDot(n.eventEnd) || '?'}` : '';
   const thumb = n.image ? `<img class="card-thumb" src="${n.image}" alt="" loading="lazy">` : '';
+  const tl = timelineHtml(n);
   const pts = (n.keyPoints || []).slice(0, 3).map((p) => `<span class="pt">${esc(p)}</span>`).join('');
   const failed = n.needsHelp || (n.type === 'link' && !n.summary && !(n.keyPoints || []).length);
   const helpHtml = failed ? `<p class="needs-help-msg"><b>抓不到內容</b>，你可以幫我補充，我來整理成重點。</p>` : '';
@@ -1009,20 +1025,23 @@ function noteCard(n, idx) {
   const delay = Math.min((idx || 0) * 50, 400);
   return `<article class="card${failed ? ' needs-help' : ''}" data-id="${n.id}" style="animation-delay:${delay}ms">
     <button class="card-del" data-act="del" title="刪除">×</button>
-    ${thumb}
-    <div class="card-body">
-      <div class="card-top">
-        <span class="card-title">${titleHtml}</span>
-        ${cd}
-      </div>
-      ${dates ? `<div class="card-sub">${dates}</div>` : ''}
-      ${n.summary ? `<p class="card-summary">${esc(n.summary)}</p>` : ''}
-      ${(!n.summary && n.body) ? `<p class="card-summary">${esc(n.body.slice(0, 120))}</p>` : ''}
-      ${pts ? `<div class="card-points">${pts}</div>` : ''}
-      ${helpHtml}
-      <div class="card-foot">
-        <span class="brain-tag">${b ? esc(b.name) : ''}</span>
-        <span class="card-actions">${actionsHtml}</span>
+    <div class="card-main">
+      ${thumb}
+      <div class="card-body">
+        <div class="card-top">
+          <span class="card-title">${titleHtml}</span>
+          ${cd}
+        </div>
+        ${dates ? `<div class="card-sub">${dates}</div>` : ''}
+        ${tl}
+        ${n.summary ? `<p class="card-summary">${esc(n.summary)}</p>` : ''}
+        ${(!n.summary && n.body) ? `<p class="card-summary">${esc(n.body.slice(0, 120))}</p>` : ''}
+        ${pts ? `<div class="card-points">${pts}</div>` : ''}
+        ${helpHtml}
+        <div class="card-foot">
+          <span class="brain-tag">${b ? esc(b.name) : ''}</span>
+          <span class="card-actions">${actionsHtml}</span>
+        </div>
       </div>
     </div>
   </article>`;
@@ -1193,7 +1212,7 @@ function exportData() {
     { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = '活筆記-備份.json';
+  a.download = '期印-備份.json';
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
