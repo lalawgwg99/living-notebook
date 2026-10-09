@@ -619,7 +619,17 @@ function applyEventFields(note, s) {
 }
 async function finalizeNote(note, s, doneLabels) {
   note.summary = String(s.summary || '').slice(0, 120);
-  note.keyPoints = Array.isArray(s.key_points) ? s.key_points.filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(0, 5) : [];
+  const rawPts = Array.isArray(s.key_points) ? s.key_points.filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)) : [];
+  // 去重：去掉重複、以及跟摘要重複的重點
+  const seen = new Set();
+  note.keyPoints = rawPts.filter((p) => {
+    const k = p.replace(/\s/g, '');
+    if (!k || seen.has(k)) return false;
+    const sk = note.summary.replace(/\s/g, '');
+    if (sk.includes(k) || k.includes(sk)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 5);
   note.tags = Array.isArray(s.tags) ? s.tags.filter((x) => typeof x === 'string').map((x) => x.slice(0, 12)).slice(0, 5) : [];
   applyEventFields(note, s);
   notes.unshift(note); save(LS_NOTES, notes);
@@ -709,7 +719,7 @@ async function addImageNote() {
     if (!s || !s.summary) throw new Error('bad-json');
     const note = {
       id: uid(), type: 'image',
-      title: (hint || s.event_name || 'DM圖片').slice(0, 30),
+      title: (hint || s.event_name || (s.brand ? s.brand + '活動' : null) || 'DM圖片').slice(0, 30),
       image: pendingImage.thumb,
       brainId: null, createdAt: Date.now(),
     };
