@@ -1208,14 +1208,20 @@ function openModal() {
   $('modalLoading').classList.add('hidden');
   $('modalPipeline').innerHTML = '';
   $('modalPipeline').classList.add('hidden');
-  setTimeout(() => (modalTab === 'link' ? $('linkUrl') : $('textTitle')).focus(), 50);
+  setTimeout(() => {
+    const el = modalTab === 'link' ? $('linkUrl') : modalTab === 'text' ? $('textTitle')
+      : modalTab === 'image' ? $('imgHint') : null;
+    if (el) el.focus();
+  }, 50);
 }
 function closeModal(force) { if (!pipelining || force) $('modalBackdrop').classList.add('hidden'); }
 function setModalTab(t) {
   modalTab = t;
   document.querySelectorAll('.modal-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
-  $('paneLink').classList.toggle('hidden', t !== 'link');
-  $('paneText').classList.toggle('hidden', t !== 'text');
+  ['link', 'text', 'image', 'pdf'].forEach((k) => {
+    const pane = $('pane' + k[0].toUpperCase() + k.slice(1));
+    if (pane) pane.classList.toggle('hidden', t !== k);
+  });
 }
 async function saveNote() {
   if (modalTab === 'link') {
