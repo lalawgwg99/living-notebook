@@ -63,7 +63,6 @@ let persona = load(LS_PERSONA, null) || {
 };
 let chatHistory = load(LS_CHAT, []);
 let selectedBrain = 'all';   // 'all' | 'inbox' | brainId
-let activeFilter = 'all';
 let searchKw = '';
 let pipelining = false;
 let chatting = false;
@@ -97,7 +96,8 @@ async function absorbHost(silent) {
   const pool = notes.filter((n) => !n.counted);
   const target = (pool.length ? pool : notes).slice(0, 12);
   if (target.length === 0) { if (!silent) toast('還沒有筆記可以吸收'); return; }
-  if (!silent) { $('absorbBtn').disabled = true; $('absorbBtn').textContent = '🌀 長大中…'; }
+  const ab = $('absorbBtn');
+  if (!silent && ab) { ab.disabled = true; ab.textContent = '🌀 長大中…'; }
   try {
     const d = await aiTask('notebook-absorb', {
       persona: { name: persona.name, mood: persona.mood, emoji: persona.emoji, traits: persona.traits, bio: persona.bio },
@@ -120,7 +120,10 @@ async function absorbHost(silent) {
   } catch (e) {
     if (!silent) toast('這次沒能好好思考，下次再試');
   } finally {
-    if (!silent) { $('absorbBtn').disabled = false; $('absorbBtn').textContent = '🌀 主人格吸收長大'; }
+    if (!silent) {
+      const ab2 = $('absorbBtn');
+      if (ab2) { ab2.disabled = false; ab2.textContent = '🌀 主人格吸收長大'; }
+    }
   }
 }
 
@@ -247,9 +250,55 @@ async function retryIngest(id) {
   } finally { pipelining = false; }
 }
 
+/* 手動補充：影片穿隱形衣時，主人餵內容給它 */
+let suppId = null;
+function openSupplement(id) {
+  const n = notes.find((x) => x.id === id);
+  if (!n) return;
+  suppId = id;
+  $('suppDesc').textContent = `「${(n.title || n.url).slice(0, 40)}」穿了隱形衣，我抓不到內容。把你記得的、或影片下方的簡介貼上來，我來整理成重點。`;
+  $('suppText').value = '';
+  $('suppLoading').classList.add('hidden');
+  $('suppSave').disabled = false;
+  $('suppBackdrop').classList.remove('hidden');
+  setTimeout(() => $('suppText').focus(), 50);
+}
+function closeSupplement() { $('suppBackdrop').classList.add('hidden'); suppId = null; }
+async function saveSupplement() {
+  const text = $('suppText').value.trim();
+  if (!text || !suppId || pipelining) return;
+  const n = notes.find((x) => x.id === suppId);
+  if (!n) { closeSupplement(); return; }
+  pipelining = true;
+  $('suppLoading').classList.remove('hidden');
+  $('suppSave').disabled = true;
+  try {
+    const d = await aiTask('notebook-summarize', { title: n.title, text }, 60000);
+    const s = extractJSON(d.text);
+    if (!s || !s.summary) throw new Error('bad-json');
+    n.summary = String(s.summary).slice(0, 120);
+    n.keyPoints = Array.isArray(s.key_points) ? s.key_points.filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(0, 5) : [];
+    n.tags = Array.isArray(s.tags) ? s.tags.filter((x) => typeof x === 'string').map((x) => x.slice(0, 12)).slice(0, 5) : [];
+    n.needsHelp = false;
+    save(LS_NOTES, notes);
+    await routeNote(n, true);
+    if (n.brainId) await evolveBrain(n.brainId, n);
+    maybeAbsorbHost();
+    closeSupplement(); renderAll();
+    toast('補充完成 ✨ 大腦吃掉了');
+  } catch (e) {
+    toast('整理失敗，再試一次');
+  } finally {
+    pipelining = false;
+    $('suppLoading').classList.add('hidden');
+    $('suppSave').disabled = false;
+  }
+}
+
 async function addLinkNote(url) {
   if (pipelining) return;
   pipelining = true;
+  $('personaOrb').classList.add('working');
   $('modalLoading').classList.remove('hidden');
   $('modalPipeline').innerHTML = '';
   $('modalSave').disabled = true;
@@ -257,6 +306,7 @@ async function addLinkNote(url) {
     pipelineStep('把內容抓回來');
     $('modalLoadingText').textContent = '正在把內容抓回來…';
     const data = await fetchIngest(url);
+    const partial = data && data.partial;
     const note = {
       id: uid(), type: 'link', url,
       title: (data && data.title) || url,
@@ -264,9 +314,11 @@ async function addLinkNote(url) {
       keyPoints: (data && data.key_points) || [],
       tags: (data && data.tags) || [],
       site: (data && data.source && data.source.site) || '',
+      author: (data && data.author) || '',
+      needsHelp: !!partial || !data,
       brainId: null, createdAt: Date.now(),
     };
-    if (!data) note.summary = '（這則還沒抓到內容，之後可以重抓）';
+    if (!data) note.summary = '';
     notes.unshift(note); save(LS_NOTES, notes);
     pipelineStep('把內容抓回來', true);
 
@@ -287,6 +339,7 @@ async function addLinkNote(url) {
     closeModal(true); renderAll();
   } finally {
     pipelining = false;
+    $('personaOrb').classList.remove('working');
     $('modalLoading').classList.add('hidden');
     $('modalSave').disabled = false;
     $('linkUrl').value = '';
@@ -443,7 +496,6 @@ function filteredNotes() {
   const kw = searchKw.trim().toLowerCase();
   return notes
     .filter((n) => selectedBrain === 'all' ? true : selectedBrain === 'inbox' ? !n.brainId : n.brainId === selectedBrain)
-    .filter((n) => activeFilter === 'all' || n.type === activeFilter)
     .filter((n) => {
       if (!kw) return true;
       const hay = [n.title, n.summary, n.url, (n.keyPoints || []).join(' '), (n.tags || []).join(' '), n.body]
@@ -453,7 +505,7 @@ function filteredNotes() {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-function noteCard(n) {
+function noteCard(n, idx) {
   const pts = (n.keyPoints || []).slice(0, 5);
   const ptsHtml = pts.length
     ? `<ul class="note-points collapsed" id="pts-${n.id}">${pts.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
@@ -467,7 +519,21 @@ function noteCard(n) {
   const b = n.brainId && brainById(n.brainId);
   const brainHtml = b ? `<div class="note-brain">${esc(b.emoji)} ${esc(b.name)}</div>` : '';
   const bodyHtml = n.body ? `<p class="note-summary">${esc(n.body.slice(0, 200))}${n.body.length > 200 ? '…' : ''}</p>` : '';
-  return `<article class="note-card ${n.type === 'synth' ? 'synth' : ''}" data-id="${n.id}">
+
+  // 抓不到內容：溫柔的求救卡片
+  let helpHtml = '';
+  let actionsHtml = '';
+  const failed = n.needsHelp || (n.type === 'link' && !n.summary && !(n.keyPoints || []).length);
+  if (failed) {
+    helpHtml = `<p class="needs-help-msg">🙈 <b>這支影片穿了隱形衣</b>，我抓不到它的內容。你可以幫我補充，我來整理成重點。</p>`;
+    actionsHtml = `<div class="note-actions has-actions">
+        <button class="btn-mini" data-act="supplement">✏️ 幫我補充</button>
+        <button class="btn-mini ghost" data-act="retry">↻ 重抓</button>
+      </div>`;
+  }
+  const delay = Math.min((idx || 0) * 60, 600);
+  return `<article class="note-card ${n.type === 'synth' ? 'synth' : ''} ${failed ? 'needs-help' : ''}" data-id="${n.id}" style="animation-delay:${delay}ms">
+    <button class="note-del" data-act="del" title="刪除">×</button>
     <div class="note-top">
       <span class="note-type">${n.type === 'link' ? '🔗 連結' : n.type === 'synth' ? '🤖 腦的思考' : '✏️ 文字'}</span>
       <span class="note-date">${fmtDate(n.createdAt)}</span>
@@ -475,17 +541,15 @@ function noteCard(n) {
     ${titleHtml}
     ${n.summary ? `<p class="note-summary">${esc(n.summary)}</p>` : ''}
     ${bodyHtml}
+    ${helpHtml}
     ${ptsHtml}${tagsHtml}${brainHtml}
-    <div class="note-actions">
-      ${n.url ? `<button data-act="retry">↻ 重抓</button>` : ''}
-      <button data-act="del" class="danger">刪除</button>
-    </div>
+    ${actionsHtml}
   </article>`;
 }
 
 function renderNotes() {
   const list = filteredNotes();
-  $('notesGrid').innerHTML = list.map(noteCard).join('');
+  $('notesGrid').innerHTML = list.map((n, i) => noteCard(n, i)).join('');
   const showEmpty = list.length === 0;
   $('emptyState').style.display = showEmpty ? '' : 'none';
   $('notesGrid').style.display = showEmpty ? 'none' : '';
@@ -623,16 +687,12 @@ function bind() {
   $('modalSave').onclick = saveNote;
   document.querySelectorAll('.modal-tab').forEach((b) => { b.onclick = () => setModalTab(b.dataset.tab); });
   $('linkUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') saveNote(); });
-  $('absorbBtn').onclick = () => absorbHost(false);
+
+  $('suppCancel').onclick = closeSupplement;
+  $('suppSave').onclick = saveSupplement;
+  $('suppBackdrop').addEventListener('click', (e) => { if (e.target === $('suppBackdrop')) closeSupplement(); });
 
   $('searchInput').addEventListener('input', (e) => { searchKw = e.target.value; renderNotes(); });
-  $('filterRow').addEventListener('click', (e) => {
-    const f = e.target.closest('[data-filter]');
-    if (!f) return;
-    activeFilter = f.dataset.filter;
-    document.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('active', b === f));
-    renderNotes();
-  });
   $('brainList').addEventListener('click', (e) => {
     const row = e.target.closest('[data-brain]');
     if (!row) return;
@@ -659,6 +719,8 @@ function bind() {
       }
     } else if (act.dataset.act === 'retry') {
       retryIngest(id);
+    } else if (act.dataset.act === 'supplement') {
+      openSupplement(id);
     }
   });
 
@@ -675,7 +737,7 @@ function bind() {
   $('importFile').addEventListener('change', (e) => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeModal(); $('chatPanel').classList.add('hidden'); }
+    if (e.key === 'Escape') { closeModal(); closeSupplement(); $('chatPanel').classList.add('hidden'); }
   });
 }
 

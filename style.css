@@ -334,3 +334,68 @@ body {
   .persona-mini-orb { animation: none; }
   * { transition-duration: 0.01ms !important; }
 }
+
+/* ---------- 動畫 ---------- */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.note-card { animation: cardIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.modal-backdrop:not(.hidden) .modal { animation: modalIn 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.msg { animation: msgIn 0.25s ease; }
+@keyframes brainDetailIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+.brain-detail:not(.hidden) { animation: brainDetailIn 0.35s ease; }
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.brain-dot { animation: floaty 3.6s ease-in-out infinite; }
+.brain-row:nth-child(2n) .brain-dot { animation-delay: -1.2s; }
+.brain-row:nth-child(3n) .brain-dot { animation-delay: -2.4s; }
+.persona-mini-orb.working { animation: grow 1.2s ease-in-out infinite; }
+
+/* ---------- 簡約：卡片操作收起來 ---------- */
+.note-card { position: relative; }
+.note-del {
+  position: absolute; top: 8px; right: 10px;
+  background: none; border: none; cursor: pointer;
+  color: var(--ink-faint); font-size: 16px; line-height: 1;
+  opacity: 0; transition: opacity 0.2s ease, color 0.2s ease;
+  padding: 6px;
+}
+.note-card:hover .note-del { opacity: 0.7; }
+.note-del:hover { opacity: 1 !important; color: var(--danger); }
+@media (hover: none) { .note-del { opacity: 0.5; } }
+.note-actions { display: none; }
+.note-actions.has-actions { display: flex; }
+.note-actions .btn-mini {
+  background: var(--mood-soft); color: var(--ink); border: none;
+  border-radius: 999px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+  font-weight: 600;
+}
+.note-actions .btn-mini.ghost { background: transparent; color: var(--ink-faint); font-weight: 400; }
+
+/* 抓不到內容的卡片 */
+.note-card.needs-help {
+  border-left: 4px dashed var(--ink-faint);
+  background: linear-gradient(180deg, var(--card), #f3eee1);
+}
+.needs-help-msg {
+  font-size: 13.5px; color: var(--ink-soft);
+  background: rgba(43, 38, 32, 0.05); border-radius: 10px; padding: 10px 12px; margin: 0;
+}
+.needs-help-msg b { color: var(--ink); }
+
+.auto-hint { font-size: 12px; color: var(--ink-faint); margin: 0; padding: 0 2px; text-align: center; }
+.supp-title { font-family: "Noto Serif TC", serif; font-size: 19px; margin: 0 0 6px; }

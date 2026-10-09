@@ -1,5 +1,6 @@
 // notebook-ingest：把使用者貼的連結抓回來，抽出重點
 // POST /ingest { url} -> { title, summary, key_points[], tags[], source}
+// 或 { partial:true, title, author, source}（YouTube 被擋時只有標題）
 // 部署：cf_worker_deploy.py notebook-ingest worker-ingest.js worker-ingest-metadata.json
 
 const MODEL = '@cf/meta/llama-3.1-8b-instruct-fp8';
@@ -15,7 +16,10 @@ const SYSTEM_SUMMARY =
 '{"title":"標題（20字內）","summary":"一句話摘要（40字內）",' +
 '"key_points":["重點一（25字內）","重點二","重點三"],"tags":["標籤一","標籤二","標籤三"]}' +
 'key_points 給 3 到 5 個最重要的資訊，每點 25 字內；tags 給 3 到 5 個短標籤。' +
+'全程只用繁體中文回傳，絕對不可出現簡體字。' +
 '只回傳 JSON，不要加任何前言、解釋或 markdown 標記。';
+
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
 // 簡易 SSRF 防護：擋內網與特殊主機
 function hostBlocked(hostname) {
@@ -60,7 +64,6 @@ const candidates = [];
 const re = /<(article|main)([^>]*)>([\s\S]*?)<\/\1>/gi;
 let m;
 while ((m = re.exec(clean)) && candidates.length < 6) candidates.push(m[3]);
-// 常見內容容器
 const re2 = /<(div|section)([^>]*class=["'][^"']*(content|article|post|entry|main|text|body)[^"']*["'][^>]*)>([\s\S]*?)<\/\1>/gi;
 while ((m = re2.exec(clean)) && candidates.length < 12) candidates.push(m[3]);
 let best = '', bestScore = 0;
@@ -74,46 +77,69 @@ return textOf(clean);
 }
 
 function isYouTube(url) {
-return /(^|\.)youtube\.com$/i.test(url.hostname) || /(^|\.)youtu\.be$/i.test(url.hostname);
+const h = url.hostname.replace(/^www\./, '').toLowerCase();
+return h === 'youtube.com' || h === 'youtu.be' || h.endsWith('.youtube.com');
 }
 
-// YouTube：盡力抓字幕（captionTracks），失敗就退回標題＋描述
+// YouTube：youtu.be 正規化；watch 頁被擋（sorry/bot）時用 oEmbed 保底拿標題＋作者
+// 回傳 { title, author, desc, transcript, blocked}
 async function fetchYouTube(url) {
-const html = await (await fetch(url.toString(), {
-headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36', 'Accept-Language': 'zh-TW,zh;q=0.9'},
-})).text();
-const title = (html.match(/<title>([^<]+)<\/title>/i) || [])[1] || '';
-const desc = metaContent(html, 'description') || metaContent(html, 'og:description');
-let cleanTitle = title.replace(/ - YouTube$/, '').trim();
-// YouTube 擋抓時，用 oEmbed 拿標題當保底
-if (!cleanTitle) {
+let vid = '';
+const host = url.hostname.replace(/^www\./, '').toLowerCase();
+if (host === 'youtu.be') vid = url.pathname.slice(1).split(/[?/]/)[0];
+else vid = url.searchParams.get('v') || '';
+const watchUrl = vid? 'https://www.youtube.com/watch?v=' + vid: url.toString();
+
+let html = '', blocked = false;
 try {
-const oe = await (await fetch('https://www.youtube.com/oembed?url=' + encodeURIComponent(url.toString()) + '&format=json',
-{ headers: { 'User-Agent': 'Mozilla/5.0' } })).json();
-if (oe && oe.title) cleanTitle = oe.title;
-} catch {}
-}
-let transcript = '';
+const resp = await fetch(watchUrl, {
+headers: { 'User-Agent': UA, 'Accept-Language': 'zh-TW,zh;q=0.9'},
+redirect: 'follow',
+});
+const finalUrl = resp.url || '';
+html = await resp.text();
+if (/sorry\/index|consent\.youtube|accounts\.google/.test(finalUrl)) blocked = true;
+else if (/captcha/i.test(html.slice(0, 5000))) blocked = true;
+} catch (e) { blocked = true;}
+
+let title = '', desc = '', transcript = '';
+if (!blocked && html) {
+title = (html.match(/<title>([^<]+)<\/title>/i) || [])[1] || '';
+desc = metaContent(html, 'description') || metaContent(html, 'og:description');
 try {
 const capMatch = html.match(/"captionTracks":\s*(\[[\s\S]*?\])/);
 if (capMatch) {
 const tracks = JSON.parse(capMatch[1]);
-const pick = tracks.find((t) => /zh(-|_)?(Hant|TW)/i.test(t.languageCode || '') || /zh/i.test(t.name?.simpleText || ''))
-|| tracks.find((t) => /^en/i.test(t.languageCode || ''))
-|| tracks[0];
+const zh = (t) => /zh(-|_)?(Hant|TW)/i.test(t.languageCode || '') || /zh/i.test((t.name && t.name.simpleText) || '');
+const pick = tracks.find(zh) || tracks.find((t) => /^en/i.test(t.languageCode || '')) || tracks[0];
 if (pick && pick.baseUrl) {
-const xml = await (await fetch(pick.baseUrl, { headers: { 'User-Agent': 'Mozilla/5.0'}})).text();
-const parts = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map((x) =>
-x[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim());
+const xml = await (await fetch(pick.baseUrl, { headers: { 'User-Agent': UA}})).text();
+const parts = [];
+const re3 = /<text[^>]*>([\s\S]*?)<\/text>/g;
+let tm;
+while ((tm = re3.exec(xml))) {
+parts.push(tm[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim());
+}
 transcript = parts.join(' ').replace(/\s+/g, ' ');
 }
 }
-} catch {}
-return { title: cleanTitle || target.toString(), desc, transcript};
+} catch (e) {}
+}
+let author = '';
+try {
+const oe = await (await fetch('https://www.youtube.com/oembed?url=' + encodeURIComponent(watchUrl) + '&format=json',
+{ headers: { 'User-Agent': UA}})).json();
+if (oe) {
+if (!title && oe.title) title = oe.title;
+if (oe.author_name) author = oe.author_name;
+}
+} catch (e) {}
+const cleanTitle = String(title || '').replace(/ - YouTube$/, '').trim();
+return { title: cleanTitle, author: author, desc: desc, transcript: transcript, blocked: blocked &&!transcript &&!desc};
 }
 
 async function summarize(env, title, content) {
-const input = `標題：${title}\n\n內容：\n${content.slice(0, 6000)}`;
+const input = '標題：' + title + '\n\n內容：\n' + content.slice(0, 6000);
 const resp = await env.AI.run(MODEL, {
 messages: [
 { role: 'system', content: SYSTEM_SUMMARY},
@@ -124,9 +150,9 @@ temperature: 0.2,
 });
 const raw = typeof resp?.response === 'string'? resp.response.trim(): '';
 let data = null;
-try { data = JSON.parse(raw);} catch {
+try { data = JSON.parse(raw);} catch (e) {
 const m = raw.match(/\{[\s\S]*\}/);
-if (m) { try { data = JSON.parse(m[0]);} catch {}}
+if (m) { try { data = JSON.parse(m[0]);} catch (e2) {}}
 }
 return data;
 }
@@ -158,7 +184,7 @@ const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 if (rateLimited(ip)) return Response.json({ error: 'too many requests'}, { status: 429, headers: cors});
 
 let body;
-try { body = await request.json();} catch {
+try { body = await request.json();} catch (e) {
 return Response.json({ error: 'bad request'}, { status: 400, headers: cors});
 }
 let target;
@@ -166,22 +192,33 @@ try {
 target = new URL(String(body.url || '').trim());
 if (!/^https?:$/.test(target.protocol)) throw new Error('proto');
 if (hostBlocked(target.hostname)) throw new Error('blocked');
-} catch {
+} catch (e) {
 return Response.json({ error: 'bad url'}, { status: 400, headers: cors});
 }
 
 try {
-let title = '', content = '';
+let title = '', content = '', author = '';
 if (isYouTube(target)) {
 const yt = await fetchYouTube(target);
 title = yt.title || target.toString();
+author = yt.author || '';
+// 被擋到只剩標題：回 partial，讓前端走手動補充
+if (yt.blocked && yt.title) {
+return Response.json({
+partial: true,
+title: yt.title.slice(0, 80),
+author: author.slice(0, 40),
+source: { url: target.toString(), site: 'youtube.com'},
+}, { headers: cors});
+}
 content = yt.transcript
-? `\n${yt.transcript.slice(0, 8000)}`
-: `\n${yt.desc || '（無描述）'}`;
+? '\n' + yt.transcript.slice(0, 8000)
+: '\n' + (yt.desc || '（無描述）');
+if (author) content = '作者：' + author + '\n' + content;
 } else {
 const resp = await fetch(target.toString(), {
 headers: {
-'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+'User-Agent': UA,
 'Accept-Language': 'zh-TW,zh;q=0.9',
 'Accept': 'text/html',
 },

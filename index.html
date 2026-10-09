@@ -39,7 +39,7 @@
       </div>
       <nav class="brain-list" id="brainList"></nav>
 
-      <button id="absorbBtn" class="btn-absorb">🌀 主人格吸收長大</button>
+      <p class="auto-hint">✨ 主人格會自己默默長大</p>
       <div class="side-stats">
         <span><b id="statNotes">0</b> 則收藏</span>
         <span><b id="statPoints">0</b> 個重點</span>
@@ -49,12 +49,6 @@
     <!-- 右：腦內世界 -->
     <section class="notes-col">
       <div class="brain-detail hidden" id="brainDetail"></div>
-      <div class="filter-row" id="filterRow">
-        <button class="chip active" data-filter="all">全部</button>
-        <button class="chip" data-filter="link">🔗 連結</button>
-        <button class="chip" data-filter="text">✏️ 文字</button>
-        <button class="chip" data-filter="synth">🤖 腦的思考</button>
-      </div>
       <div class="notes-grid" id="notesGrid"></div>
       <div class="empty-state" id="emptyState">
         <div class="empty-emoji">🕳️</div>
@@ -98,6 +92,22 @@
       </div>
       <div class="modal-loading hidden" id="modalLoading"><span class="spinner"></span><span id="modalLoadingText">正在抓取內容…</span></div>
       <div class="modal-pipeline hidden" id="modalPipeline"></div>
+    </div>
+  </div>
+
+  <!-- 手動補充對話框 -->
+  <div class="modal-backdrop hidden" id="suppBackdrop">
+    <div class="modal">
+      <h3 class="supp-title">✏️ 幫它補充內容</h3>
+      <p class="modal-note" id="suppDesc">這支影片穿了隱形衣，我抓不到內容。把你記得的、或影片下方的簡介貼上來，我來整理成重點。</p>
+      <div class="modal-pane">
+        <textarea id="suppText" rows="6" placeholder="貼上影片簡介、字幕，或你記得的內容…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="suppCancel">取消</button>
+        <button class="btn-primary" id="suppSave">讓 AI 整理</button>
+      </div>
+      <div class="modal-loading hidden" id="suppLoading"><span class="spinner"></span><span>AI 整理中…</span></div>
     </div>
   </div>
 
