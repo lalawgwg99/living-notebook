@@ -66,6 +66,7 @@ let selectedBrain = 'all';   // 'all' | 'inbox' | brainId
 let activeFilter = 'all';
 let searchKw = '';
 let pipelining = false;
+let chatting = false;
 
 const activeBrains = () => brains.filter((b) => !b.retired);
 const brainById = (id) => brains.find((b) => b.id === id);
@@ -207,6 +208,45 @@ function pipelineStep(text, done) {
   return div;
 }
 
+async function fetchIngest(url) {
+  if (!INGEST_URL) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const r = await fetch(INGEST_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }), signal: ctrl.signal,
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; } finally { clearTimeout(timer); }
+}
+
+/* 原地重抓：更新同一則，不建新的 */
+async function retryIngest(id) {
+  const n = notes.find((x) => x.id === id);
+  if (!n || !n.url || pipelining) return;
+  pipelining = true;
+  toast('↻ 重新抓取中…');
+  try {
+    const data = await fetchIngest(n.url);
+    if (data && (data.title || data.summary)) {
+      n.title = data.title || n.url;
+      n.summary = data.summary || '';
+      n.keyPoints = Array.isArray(data.key_points) ? data.key_points.slice(0, 5) : [];
+      n.tags = Array.isArray(data.tags) ? data.tags.slice(0, 5) : [];
+      n.site = (data.source && data.source.site) || '';
+      save(LS_NOTES, notes);
+      await routeNote(n, true);
+      if (n.brainId) await evolveBrain(n.brainId, n);
+      renderAll();
+      toast('抓到了 ✨');
+    } else {
+      toast('還是抓不到，稍後再試試');
+    }
+  } finally { pipelining = false; }
+}
+
 async function addLinkNote(url) {
   if (pipelining) return;
   pipelining = true;
@@ -216,18 +256,7 @@ async function addLinkNote(url) {
   try {
     pipelineStep('把內容抓回來');
     $('modalLoadingText').textContent = '正在把內容抓回來…';
-    let data = null;
-    if (INGEST_URL) {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 60000);
-      try {
-        const r = await fetch(INGEST_URL, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }), signal: ctrl.signal,
-        });
-        if (r.ok) data = await r.json();
-      } catch {} finally { clearTimeout(timer); }
-    }
+    const data = await fetchIngest(url);
     const note = {
       id: uid(), type: 'link', url,
       title: (data && data.title) || url,
@@ -255,7 +284,7 @@ async function addLinkNote(url) {
     s2.classList.add('done'); s2.textContent = '✓ 大腦進化完成';
 
     maybeAbsorbHost();
-    closeModal(); renderAll();
+    closeModal(true); renderAll();
   } finally {
     pipelining = false;
     $('modalLoading').classList.add('hidden');
@@ -278,7 +307,7 @@ async function addTextNote(title, body) {
     await routeNote(note);
     if (note.brainId) await evolveBrain(note.brainId, note);
     maybeAbsorbHost();
-    closeModal(); renderAll();
+    closeModal(true); renderAll();
     $('textTitle').value = ''; $('textBody').value = '';
   } finally { pipelining = false; }
 }
@@ -498,7 +527,9 @@ function openChat() {
 async function askChat() {
   const input = $('chatInput');
   const q = input.value.trim();
-  if (!q) return;
+  if (!q || chatting) return;
+  chatting = true;
+  $('chatSend').disabled = true;
   input.value = '';
   pushChatMsg('user', q);
   const typing = document.createElement('div');
@@ -519,6 +550,9 @@ async function askChat() {
   } catch (e) {
     typing.remove();
     pushChatMsg('bot', '大腦們現在有點累（連不上），稍後再問我一次吧。');
+  } finally {
+    chatting = false;
+    $('chatSend').disabled = false;
   }
 }
 
@@ -558,7 +592,7 @@ function openModal() {
   $('modalPipeline').classList.add('hidden');
   setTimeout(() => (modalTab === 'link' ? $('linkUrl') : $('textTitle')).focus(), 50);
 }
-function closeModal() { if (!pipelining) $('modalBackdrop').classList.add('hidden'); }
+function closeModal(force) { if (!pipelining || force) $('modalBackdrop').classList.add('hidden'); }
 function setModalTab(t) {
   modalTab = t;
   document.querySelectorAll('.modal-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === t));
@@ -624,8 +658,7 @@ function bind() {
         save(LS_NOTES, notes); renderAll();
       }
     } else if (act.dataset.act === 'retry') {
-      const n = notes.find((x) => x.id === id);
-      if (n && n.url) { setModalTab('link'); openModal(); $('linkUrl').value = n.url; }
+      retryIngest(id);
     }
   });
 
