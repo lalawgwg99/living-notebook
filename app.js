@@ -713,9 +713,18 @@ function bind() {
     const act = e.target.closest('[data-act]');
     if (!act) return;
     if (act.dataset.act === 'del') {
-      if (confirm('確定刪除這則筆記？')) {
+      // 兩段式刪除：第一下變成「確定？」，3 秒內再按一下才真的刪
+      if (act.classList.contains('confirming')) {
         notes = notes.filter((n) => n.id !== id);
         save(LS_NOTES, notes); renderAll();
+        toast('已刪除');
+      } else {
+        act.classList.add('confirming');
+        act.textContent = '確定？';
+        setTimeout(() => {
+          const b = document.querySelector(`.note-card[data-id="${id}"] .note-del.confirming`);
+          if (b) { b.classList.remove('confirming'); b.textContent = '×'; }
+        }, 3000);
       }
     } else if (act.dataset.act === 'retry') {
       retryIngest(id);

@@ -11,13 +11,56 @@ const ALLOWED_ORIGINS = [
 'http://127.0.0.1:8000',
 ];
 
+const TRAD_MAP = '复→複、发→發、国→國、学→學、读→讀、说→說、认→認、识→識、时→時、这→這、个→個、无→無、与→與、为→為、来→來、对→對、开→開、关→關、门→門、现→現、让→讓、远→遠、运→運、经→經、济→濟、话→話、设→設、证→證、评→評、质→質、义→義、习→習、务→務、广→廣、严→嚴、宝→寶、专→專、传→傳、归→歸、并→並、应→應、还→還、过→過、进→進、连→連、适→適、观→觀、规→規、选→選、达→達、财→財、资→資、误→誤、栅→柵、轻→輕、权→權、势→勢、艺→藝、节→節、华→華、丽→麗、万→萬、东→東、丝→絲、丢→丟、两→兩、丧→喪、临→臨、举→舉、乐→樂、乔→喬、乡→鄉、书→書、买→買、乱→亂、争→爭、亏→虧、云→雲、互→互、亚→亞、亲→親、宁→寧、审→審、写→寫、军→軍、农→農、决→決、冻→凍、净→淨、凭→憑、凯→凱、击→擊、则→則、刚→剛、创→創、删→刪、划→劃、剂→劑、剑→劍、阀→閥、阁→閣、献→獻、变→變、议→議、讯→訊、记→記、讲→講、许→許、论→論、访→訪、词→詞、语→語、法→法、调→調、课→課、请→請、诸→諸、贸→貿、购→購、轨→軌、轮→輪、软→軟、轴→軸、辈→輩、辉→輝、输→輸、辞→辭、边→邊、迈→邁、违→違、迟→遲、迹→跡、遗→遺、遥→遙、邓→鄧、邮→郵、邻→鄰、释→釋、错→錯、键→鍵、镇→鎮、镜→鏡、长→長、问→問、闪→閃、闭→閉、闯→闖、闲→閒、闷→悶、闹→鬧、闻→聞、阅→閱、队→隊、阳→陽、阴→陰、阵→陣、阶→階、际→際、陆→陸、随→隨、隐→隱、雾→霧、顶→頂、项→項、顺→順、须→須、颁→頒、顾→顧、顿→頓、预→預、领→領、颇→頗、颈→頸、风→風、飞→飛、饭→飯、肃→肅、虽→雖、验→驗、险→險';
+
 const SYSTEM_SUMMARY =
 '你是繁體中文摘要助手。使用者給你一篇網頁或影片的文字內容，你只回傳 JSON，格式固定：' +
 '{"title":"標題（20字內）","summary":"一句話摘要（40字內）",' +
 '"key_points":["重點一（25字內）","重點二","重點三"],"tags":["標籤一","標籤二","標籤三"]}' +
 'key_points 給 3 到 5 個最重要的資訊，每點 25 字內；tags 給 3 到 5 個短標籤。' +
-'全程只用繁體中文回傳，絕對不可出現簡體字。' +
+'全程只用繁體中文（台灣用法）回傳，絕對不可出現簡體字。' +
+'注意：原文可能是簡體中文，你必須先理解內容，再用自己的繁體中文重寫，不可照抄原文簡體字。' +
+'對照：复→複、发→發、国→國、学→學、读→讀、说→說、认→認、识→識、时→時、这→這、个→個、无→無、与→與、为→為、来→來、对→對、开→開、关→關、门→門、现→現、让→讓、远→遠、运→運、经→經、济→濟、话→話、设→設、证→證、评→評、质→質、义→義、习→習、务→務、广→廣、严→嚴、宝→寶、专→專、传→傳、归→歸、并→並、应→應、还→還、过→過、进→進、远→遠、连→連、适→適、观→觀、规→規、选→選、达→達、运→運。' +
 '只回傳 JSON，不要加任何前言、解釋或 markdown 標記。';
+
+// 常見簡體特徵字：命中任一即視為含簡體，需轉繁
+const SIMP_RE = /[发国学读说认识时这无与为来对开关联现让远运经话设证评质义习务广严宝专传归并应还过进连适观规选达财资误栅轻权势艺节华万丽东丝丢两丧临举乐乔乡书买乱争亏云互亚亲宁审写军农决冻净凭凯击则刚创删划剂剑阀阁献变议讯记讲许论访词语法调课请诸贸购轨轮软轴辈辉输辞边迈违迟迹遗遥邓邮邻释错键镇镜长门问闪闭闯闲闷闹闻阅队阳阴阵阶际陆随隐雾顶项顺须颁顾顿预领颇颈风飞饭肃虽验险导异弃张弥弯弹强当彻态怀悦悬悯惊惠惭惯愤愿懒虑戏战户扎扑执扩扰扫扬换损捡搅摆携摄摇搞搔搜复]/;
+// 多音多義字：不做機械轉換，留給 AI 依上下文判斷
+const AMBIGUOUS = new Set(['发','复','干','伙','借','尽','丑','余','征','卷','划','回','里','后','只','表','斗','松','舍','范','丰','朴','咸','佣','御','旋','谷','腊','纤','秋','虫','钟','银','链','镇','针','诊','钓','铁','铃','铅','铝','铜','铠','鉴']);
+const DET_MAP = {};
+for (const pair of TRAD_MAP.split('、')) {
+const pv = pair.split('→');
+if (pv.length === 2 && pv[0] && pv[1] && pv[0] !== pv[1] && !AMBIGUOUS.has(pv[0])) DET_MAP[pv[0]] = pv[1];
+}
+const DET_RE = new RegExp('[' + Object.keys(DET_MAP).join('') + ']', 'g');
+function detTrad(s) { return String(s || '').replace(DET_RE, (c) => DET_MAP[c] || c); }
+
+async function toTraditional(env, obj) {
+const texts = [obj.title, obj.summary, ...(obj.key_points || []), ...(obj.tags || [])].join('');
+if (!SIMP_RE.test(texts)) return obj;
+try {
+const prompt = '把下面 JSON 裡所有文字轉成繁體中文（台灣用法），key 和結構完全不變，只回傳 JSON。' +
+'簡繁對照：' + TRAD_MAP + '\n' + JSON.stringify(obj);
+const out = await env.AI.run(MODEL, {
+messages: [{ role: 'user', content: prompt }], max_tokens: 1200,
+});
+const raw = (out && out.response) || '';
+const m = raw.match(/\{[\s\S]*\}/);
+if (!m) return obj;
+const fixed = JSON.parse(m[0]);
+if (fixed && fixed.summary) {
+fixed.title = detTrad(fixed.title); fixed.summary = detTrad(fixed.summary);
+fixed.key_points = (fixed.key_points || []).map(detTrad);
+fixed.tags = (fixed.tags || []).map(detTrad);
+return fixed;
+}
+} catch {}
+// AI 沒轉乾淨也沒關係：機械掃一遍無歧義字
+obj.title = detTrad(obj.title); obj.summary = detTrad(obj.summary);
+obj.key_points = (obj.key_points || []).map(detTrad);
+obj.tags = (obj.tags || []).map(detTrad);
+return obj;
+}
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
@@ -154,7 +197,17 @@ try { data = JSON.parse(raw);} catch (e) {
 const m = raw.match(/\{[\s\S]*\}/);
 if (m) { try { data = JSON.parse(m[0]);} catch (e2) {}}
 }
+if (data) data = await toTraditional(env, data);
 return data;
+}
+
+// 單一字串轉繁（給標題 fallback 用）：先機械轉，無歧義字一定中
+async function tradText(env, str) {
+if (!str) return str;
+const mech = detTrad(str);
+if (!SIMP_RE.test(mech)) return mech;
+const r = await toTraditional(env, { title: mech, summary: '佔位', key_points: [], tags: [] });
+return (r && r.title) || mech;
 }
 
 // IP 限流：每分鐘 10 次（記憶體版）
@@ -206,7 +259,7 @@ author = yt.author || '';
 if (yt.blocked && yt.title) {
 return Response.json({
 partial: true,
-title: yt.title.slice(0, 80),
+title: (await tradText(env, yt.title)).slice(0, 80),
 author: author.slice(0, 40),
 source: { url: target.toString(), site: 'youtube.com'},
 }, { headers: cors});
@@ -239,12 +292,18 @@ return Response.json({ error: 'empty content'}, { status: 422, headers: cors});
 }
 const s = await summarize(env, title, content);
 if (!s) return Response.json({ error: 'ai error'}, { status: 502, headers: cors});
-return Response.json({
+const out = {
 title: String(s.title || title).slice(0, 60),
 summary: String(s.summary || '').slice(0, 120),
 key_points: Array.isArray(s.key_points)? s.key_points.filter((x) => typeof x === 'string').map((x) => x.slice(0, 80)).slice(0, 5): [],
 tags: Array.isArray(s.tags)? s.tags.filter((x) => typeof x === 'string').map((x) => x.slice(0, 12)).slice(0, 5): [],
 source: { url: target.toString(), site: target.hostname.replace(/^www\./, '')},
+};
+// 最後再掃一次：任何殘留簡體一次轉掉
+const fixed = await toTraditional(env, out);
+return Response.json({
+title: fixed.title, summary: fixed.summary,
+key_points: fixed.key_points, tags: fixed.tags, source: out.source,
 }, { headers: cors});
 } catch (e) {
 return Response.json({ error: 'fetch failed'}, { status: 502, headers: cors});

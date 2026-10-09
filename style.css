@@ -376,6 +376,8 @@ body {
 }
 .note-card:hover .note-del { opacity: 0.7; }
 .note-del:hover { opacity: 1 !important; color: var(--danger); }
+.note-del.confirming { opacity: 1 !important; color: #fff; background: var(--danger);
+  border-radius: 999px; font-size: 12px; padding: 6px 10px; font-weight: 700; }
 @media (hover: none) { .note-del { opacity: 0.5; } }
 .note-actions { display: none; }
 .note-actions.has-actions { display: flex; }
