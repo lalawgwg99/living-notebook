@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>活筆記 — 會自己長大的筆記本</title>
+<meta name="description" content="把看到的影片和文章丟進來，筆記本自動分類、長出多個大腦，自己分裂、進化。想看重點時，問它就好。">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-orb" id="brandOrb" aria-hidden="true"></span>
+      <span class="brand-name">活筆記</span>
+    </div>
+    <div class="topbar-actions">
+      <input id="searchInput" class="search" type="search" placeholder="搜尋筆記、重點、標籤…" autocomplete="off">
+      <button id="addBtn" class="btn-primary">＋ 丟進來</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- 左：主人格＋大腦們 -->
+    <aside class="side">
+      <div class="persona-mini" id="personaCard">
+        <div class="persona-mini-orb" id="personaOrb"><span id="personaEmoji">📓</span></div>
+        <div class="persona-mini-info">
+          <div class="persona-mini-name" id="personaName">一本空白的筆記本</div>
+          <div class="persona-mini-mood" id="personaMood">還沒醒來</div>
+        </div>
+      </div>
+      <p class="persona-mini-greeting" id="personaGreeting">嗨，我還沒有名字。丟一些你看到的影片或文章給我，我會自動分類、長出大腦。</p>
+
+      <div class="brains-head">
+        <span>🧠 大腦們</span>
+        <span class="brains-count" id="brainsCount"></span>
+      </div>
+      <nav class="brain-list" id="brainList"></nav>
+
+      <button id="absorbBtn" class="btn-absorb">🌀 主人格吸收長大</button>
+      <div class="side-stats">
+        <span><b id="statNotes">0</b> 則收藏</span>
+        <span><b id="statPoints">0</b> 個重點</span>
+      </div>
+    </aside>
+
+    <!-- 右：腦內世界 -->
+    <section class="notes-col">
+      <div class="brain-detail hidden" id="brainDetail"></div>
+      <div class="filter-row" id="filterRow">
+        <button class="chip active" data-filter="all">全部</button>
+        <button class="chip" data-filter="link">🔗 連結</button>
+        <button class="chip" data-filter="text">✏️ 文字</button>
+        <button class="chip" data-filter="synth">🤖 腦的思考</button>
+      </div>
+      <div class="notes-grid" id="notesGrid"></div>
+      <div class="empty-state" id="emptyState">
+        <div class="empty-emoji">🕳️</div>
+        <h2>這裡還空空的</h2>
+        <p>看到有趣的影片或文章，直接丟進來，<br>我會自動分類、摘要重點，還會長出專屬大腦。</p>
+        <button class="btn-primary" id="emptyAddBtn">丟第一則進來</button>
+      </div>
+    </section>
+  </main>
+
+  <button id="chatFab" class="chat-fab" aria-label="問筆記本">💬</button>
+  <div class="chat-panel hidden" id="chatPanel">
+    <div class="chat-head">
+      <span class="chat-title">問<span id="chatPersonaName">筆記本</span></span>
+      <button class="chat-close" id="chatClose">✕</button>
+    </div>
+    <div class="chat-body" id="chatBody"></div>
+    <div class="chat-input-row">
+      <input id="chatInput" type="text" placeholder="例如：投資腦裡有什麼重點？" autocomplete="off">
+      <button id="chatSend" class="btn-primary">送出</button>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modalBackdrop">
+    <div class="modal">
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="link">🔗 貼連結</button>
+        <button class="modal-tab" data-tab="text">✏️ 寫文字</button>
+      </div>
+      <div class="modal-pane" id="paneLink">
+        <input id="linkUrl" type="url" placeholder="貼上影片或文章連結，YouTube、新聞都可以…" autocomplete="off">
+        <p class="modal-note">丟進來之後全自動：抓內容 → 摘要重點 → 分類進大腦 → 大腦自己進化。</p>
+      </div>
+      <div class="modal-pane hidden" id="paneText">
+        <input id="textTitle" type="text" placeholder="標題（可不填）" autocomplete="off">
+        <textarea id="textBody" rows="5" placeholder="把想記的東西寫下來…"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="modalCancel">取消</button>
+        <button class="btn-primary" id="modalSave">丟進筆記本</button>
+      </div>
+      <div class="modal-loading hidden" id="modalLoading"><span class="spinner"></span><span id="modalLoadingText">正在抓取內容…</span></div>
+      <div class="modal-pipeline hidden" id="modalPipeline"></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <footer class="foot">
+    <span>活筆記 · 你的第二個大腦</span>
+    <span class="foot-links"><button id="exportBtn" class="link-btn">匯出</button> · <button id="importBtn" class="link-btn">匯入</button></span>
+    <input type="file" id="importFile" accept="application/json" class="hidden">
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
