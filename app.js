@@ -1068,7 +1068,8 @@ function retrieve(question, k) {
     return { n, s };
   }).filter((x) => x.s > 0).sort((a, b) => b.s - a.s);
   const picked = scored.slice(0, k || 5).map((x) => x.n);
-  return picked.length ? picked : pool.slice(0, 3);
+  // 零命中就回空陣列：不要塞不相關筆記，避免模型拿無關資料硬湊答案
+  return picked;
 }
 function pushChatMsg(role, text, sources) {
   chatHistory.push({ role, content: text, sources: sources || null });
